@@ -1,1 +1,11 @@
 A LKL and APR based FTP daemon.
+
+APR:
+	to build it you'll need libapr1 http://apr.apache.org/
+	on Ubuntu/Debian just do: apt-get install libapr1
+	documentation about the library API: http://apr.apache.org/docs/apr/1.2/modules.html
+	
+LKL:
+	it's not used currently. I'm just trying to get the FTP daemon to work with native files.
+	After I'll get this done, I'll add LKL calls.
+
