@@ -1,15 +1,19 @@
 // implement the listener and thread dispatcher
 #include <string.h>
 #include <apr_network_io.h>
+#include <apr_thread_proc.h>
+
 #include "listen.h"
 #include "config.h"
 #include "utils.h"
+#include "worker.h"
+
 
 static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 {
-	apr_status_t rc;
-	apr_socket_t * listen_sock;
-	apr_sockaddr_t * saddr;
+	apr_status_t	rc;
+	apr_socket_t	*listen_sock;
+	apr_sockaddr_t	*saddr;
 
 	*plisten_sock = NULL;
 
@@ -53,9 +57,13 @@ static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 
 void lfd_listen(apr_pool_t * mp)
 {
-	apr_status_t rc;
-	apr_socket_t * listen_sock;
-	apr_socket_t * client_sock;
+	apr_status_t		rc;
+	apr_pool_t		* thd_pool;
+	apr_socket_t		* listen_sock;
+	apr_socket_t		* client_sock;
+	apr_thread_t 		* thd;
+	apr_threadattr_t	* thattr;
+
 	create_listen_socket(&listen_sock, mp);
 	if(NULL == listen_sock)
 	{
@@ -68,20 +76,41 @@ void lfd_listen(apr_pool_t * mp)
 		lfd_log(LFD_ERROR, "apr_socket_listen failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
 		return;
 	}
+	rc = apr_threadattr_create(&thattr, mp);
+	if(APR_SUCCESS != rc)
+	{
+		lfd_log(LFD_ERROR, "apr_threadattr_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+		return;
+	}
 	while(1)
 	{
-		rc = apr_socket_accept(&client_sock, listen_sock, mp);
+		//###: Should I allocate the pool as a subpool of the root pool?
+		//What is the amount allocated per pool and is it freed when the child pool is destroyed?
+		//rc = apr_pool_create(&thd_pool, mp);
+		rc = apr_pool_create(&thd_pool, NULL);
+		if(APR_SUCCESS != rc)
+		{
+			lfd_log(LFD_ERROR, "apr_pool_create of thd_pool failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			continue;
+		}
+
+		rc = apr_socket_accept(&client_sock, listen_sock, thd_pool);
 		if(APR_SUCCESS != rc)
 		{
 			//###: For which errorcode must we break out of the loop?
 			lfd_log(LFD_ERROR, "apr_socket_accept failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			//maybe cache the successfully allocated pool and reuse it next iteration?
+			apr_pool_destroy(thd_pool);
 			continue;
 		}
 
+		rc = apr_thread_create(&thd, thattr, &lfd_worker_protocol_main, (void*)client_sock, thd_pool);
+		if(APR_SUCCESS != rc)
 		{
-			#define CONNECTION_DBG_STR "THIS IS A DEBUG MESSAGE! IF YOU SEE THIS CONNECTION SUCCEEDED!"
-			apr_size_t len = strlen(CONNECTION_DBG_STR);
-			apr_socket_send(client_sock, CONNECTION_DBG_STR, &len);
+			lfd_log(LFD_ERROR, "apr_thread_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			apr_socket_close(client_sock);
+			apr_pool_destroy(thd_pool);
+			continue;
 		}
 	}
 }
