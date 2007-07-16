@@ -1,4 +1,4 @@
-DEPS=listen.o main.o worker.o utils.o
+DEPS=listen.o main.o worker.o utils.o config.o
 
 GCC=gcc
 RMF=rm -f

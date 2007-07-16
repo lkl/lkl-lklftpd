@@ -19,6 +19,6 @@ void lfd_log(enum err_levels lvl, char * fmt, ...)
 	va_start(ap, fmt);
 	//for now just ignore the error level
 	vprintf(fmt, ap);
+	printf("\n");
 	va_end(ap);
 }
-
