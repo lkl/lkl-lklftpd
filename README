@@ -9,3 +9,9 @@ LKL:
 	it's not used currently. I'm just trying to get the FTP daemon to work with native files.
 	After I'll get this done, I'll add LKL calls.
 
+Design:
+	The main thread waits for connection on a given port.
+	Each accepted connection is handled on a separate thread.
+	Data relevant to the connection is held in a lfd_sess structure,
+	and a pointer to this structure is passed to all functions
+	called from the connection loop.
