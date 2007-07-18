@@ -24,7 +24,7 @@ static apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * 
 	*plfd_sess = sess = apr_pcalloc(sess_pool, sizeof(struct lfd_sess));
 	sess->sess_pool = sess_pool;
 	sess->loop_pool = loop_pool;
-	sess->sock = sock;
+	sess->comm_sock = sock;
 	return APR_SUCCESS;
 }
 static void emit_greeting(struct lfd_sess * p_sess)
