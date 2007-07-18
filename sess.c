@@ -18,9 +18,12 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 	}
 
 	*plfd_sess = sess = apr_pcalloc(sess_pool, sizeof(struct lfd_sess));
+
 	sess->sess_pool = sess_pool;
 	sess->loop_pool = loop_pool;
 	sess->comm_sock = sock;
+	sess->dbg_strerror_buffer = apr_pcalloc(sess_pool, STR_ERROR_MAX_LEN);
+
 	return APR_SUCCESS;
 }
 
@@ -30,5 +33,10 @@ void lfd_sess_destroy(struct lfd_sess *sess)
 
 	apr_pool_destroy(sess->loop_pool);
 	apr_socket_close(sess->comm_sock);
+}
+
+char * lfd_sess_strerror(struct lfd_sess * sess, apr_status_t rc)
+{
+	return apr_strerror(rc, sess->dbg_strerror_buffer, STR_ERROR_MAX_LEN);
 }
 

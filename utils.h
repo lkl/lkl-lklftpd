@@ -2,6 +2,8 @@
 #define LKLFTPD_UTILS_H__
 #include <apr_errno.h>
 
+#define STR_ERROR_MAX_LEN 300
+
 enum err_levels
 {
 	LFD_ERROR,

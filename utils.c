@@ -3,7 +3,6 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#define STR_ERROR_MAX_LEN 300
 
 
 char* lfd_apr_strerror_thunsafe(apr_status_t rc)

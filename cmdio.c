@@ -48,4 +48,3 @@ apr_status_t lfd_cmdio_write(struct lfd_sess * sess, int cmd, const char *msg, .
 	va_end(ap);
 	return rc;
 }
-
