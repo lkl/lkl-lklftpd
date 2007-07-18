@@ -14,5 +14,6 @@ struct lfd_sess
 };
 
 apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, apr_socket_t * sock);
+void lfd_sess_destroy(struct lfd_sess *sess);
 
 #endif//LKLFTPD_SESS_H__

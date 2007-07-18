@@ -77,6 +77,7 @@ void * lfd_worker_protocol_main(apr_thread_t * thd, void* param)
 	//parse_username_password(p_sess);
 
 	printf("hello\n");
+	lfd_sess_destroy(sess);
 	return NULL;
 }
 
