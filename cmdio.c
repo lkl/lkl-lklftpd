@@ -58,26 +58,28 @@ apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str
 	apr_status_t ret;
 	char *buffer;
 	char *cmd_body, *cmd_arg;
-	char ** last;
-	const char *sep =" \r\n";
+	char * last;
+	char sep =' ';
 	apr_size_t len = 100;
 	cmd_body = NULL;
 	cmd_arg = NULL;
 	
 	buffer = apr_pcalloc(p_sess->temp_pool,100);
-	
+	last =  apr_pcalloc(p_sess->temp_pool,100);
 	ret = apr_socket_recv(p_sess->comm_sock, buffer,&len);
-	printf("\n%s\n",buffer);
+
 	if (APR_EOF == ret || 0 == len) 
 	{
                 return APR_INCOMPLETE;
 	}
 	// parse the command
-	cmd_body = apr_strtok(buffer, sep, last);
+	cmd_body = apr_strtok(buffer, &sep, &last);
+	
 	if(NULL != cmd_body)
-		cmd_arg = apr_strtok(NULL, sep, last);
+		cmd_arg = apr_strtok(NULL, &sep, &last);
 	else
 		ret=APR_INCOMPLETE;
+
 	*p_cmd_str = cmd_body;
 	*p_arg_str = cmd_arg;
 	

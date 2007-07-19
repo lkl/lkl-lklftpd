@@ -70,50 +70,67 @@ static apr_status_t emit_greeting(struct lfd_sess * p_sess)
 
 static int handle_user_cmd(struct lfd_sess* p_sess)
 {
-if(0 == apr_strnatcasecmp(p_sess->user, p_sess->ftp_arg_str)) {
-	lfd_cmdio_write(p_sess, FTP_GIVEPWORD, "Password required for user.");
+	// here we should compare p_sess->ftp_arg_str with all existent users, and then make p_sess->user = p_sess->ftp_arg_str
+	// right now we consider all sessions are made on behalf of "test" user
+	if(0 == apr_strnatcasecmp(p_sess->user, p_sess->ftp_arg_str)) {
+		lfd_cmdio_write(p_sess, FTP_GIVEPWORD, "Password required for user.\r\n");
+	}
+	else
+		{
+		lfd_cmdio_write(p_sess, FTP_LOGINERR, "User doesn't exist.\r\n");
+		return 0;
+		}
 	return 1;
-}
-else
-	return 0;
 }
 
 static int handle_pass_cmd(struct lfd_sess* p_sess)
 {
-if(0 == apr_strnatcasecmp(p_sess->passwd, p_sess->ftp_arg_str) )
-	return 1;
-else
+	// if it's the test user, we accept any password
+	if(0 == apr_strnatcasecmp(p_sess->user, "test"))
+		return 1;
+	// else we test for the password, and we should do like this: find the asociated pass for the current user
+	// and compare it with p_sess->ftp_arg_str
+	if(0 == apr_strnatcasecmp(p_sess->passwd, p_sess->ftp_arg_str))
+		return 1;
 	return 0;
 }
 
 static apr_status_t get_username_password(struct lfd_sess* p_sess)
 {
 	int pass_ok, user_ok;
-
+	apr_status_t ret;
 	pass_ok = 0;
 	user_ok = 0;
 	while (!pass_ok || !user_ok)
 	{
-		lfd_cmdio_get_cmd_and_arg(p_sess, &p_sess->ftp_cmd_str,
+		ret = lfd_cmdio_get_cmd_and_arg(p_sess, &p_sess->ftp_cmd_str,
 					&p_sess->ftp_arg_str, 1);
+		if(APR_SUCCESS != ret)
+		{
+			lfd_log(LFD_ERROR, "lfd_cmdio_get_cmd_and_arg failed with errorcode %d", ret);
+			return ret;
+		}
+		printf("cmd: %s  arg: %s\n",p_sess->ftp_cmd_str, p_sess->ftp_arg_str);
 		if (0 == apr_strnatcasecmp(p_sess->ftp_cmd_str, "USER"))
 		{
+			user_ok = 0;
+			pass_ok = 0;
 			user_ok = handle_user_cmd(p_sess);
 		}
-		else if (0 == apr_strnatcasecmp(p_sess->ftp_cmd_str, "PASS") )
-		{
-			//handle pass command
-			pass_ok = handle_pass_cmd(p_sess);
-		}
-		else
-		{
-			// unknown command; send error message
-			lfd_cmdio_write(p_sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
-		}
-		if(!pass_ok || !user_ok)
-			lfd_cmdio_write(p_sess, FTP_LOGINERR, "Not logged in.");
-	
+		else 
+			if (0 == apr_strnatcasecmp(p_sess->ftp_cmd_str, "PASS") )
+			{
+				//handle pass command
+				pass_ok = handle_pass_cmd(p_sess);
+				if(!pass_ok)
+					lfd_cmdio_write(p_sess, FTP_LOGINERR, "Not logged in.\r\n");
+			}
+			else
+				{
+					lfd_cmdio_write(p_sess, FTP_LOGINERR, "Not logged in.\r\n");
+				}
 	}
+	lfd_cmdio_write(p_sess, FTP_LOGINOK, "User logged in.\r\n");
 	return APR_SUCCESS;
 }
 
