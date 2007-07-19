@@ -24,6 +24,9 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 	sess->comm_sock = sock;
 	sess->dbg_strerror_buffer = apr_pcalloc(sess_pool, STR_ERROR_MAX_LEN);
 
+	// read user/pass from config file, or let them by default 
+	sess->user="test";
+	sess->passwd=" ";
 	return APR_SUCCESS;
 }
 

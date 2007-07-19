@@ -1,6 +1,5 @@
 // implement the listener and thread dispatcher
 #include <string.h>
-#include <apr_network_io.h>
 #include <apr_thread_proc.h>
 
 #include "listen.h"
@@ -113,5 +112,27 @@ void lfd_listen(apr_pool_t * mp)
 			continue;
 		}
 	}
+}
+
+void lfd_connect(apr_socket_t ** pconnect_sock,apr_sockaddr_t * saddr, apr_pool_t * mp)
+{
+	apr_status_t rc;
+	apr_socket_t * connect_sock;
+	
+	*pconnect_sock = NULL;
+	rc = apr_socket_create(&connect_sock, saddr->family, SOCK_STREAM, APR_PROTO_TCP, mp);
+	if(APR_SUCCESS != rc)
+		{
+			lfd_log(LFD_ERROR, "apr_socket_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			return;
+		}
+	rc = apr_socket_connect(connect_sock, saddr);
+	if(APR_SUCCESS != rc)
+		{
+			lfd_log(LFD_ERROR, "apr_socket_connect failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			apr_socket_close(connect_sock);
+			return;
+		}
+	*pconnect_sock = connect_sock;
 }
 

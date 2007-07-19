@@ -4,6 +4,10 @@
 
 #include "cmdio.h"
 
+/**
+	Handles client commands and other related stuff 
+**/
+
 static void cmd_to_str(int cmd, char * buff)
 {
 	buff[3] = ' ';
@@ -48,3 +52,32 @@ apr_status_t lfd_cmdio_write(struct lfd_sess * sess, int cmd, const char *msg, .
 	va_end(ap);
 	return rc;
 }
+
+void lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str, char** p_arg_str, int set_alarm)
+{
+	/* Prepare an alarm to timeout the session.. */
+
+	/* Blocks */
+	/*control_getline(p_cmd_str, p_sess);
+	str_split_char(p_cmd_str, p_arg_str, ' ');
+	str_upper(p_cmd_str);
+	if (tunable_log_ftp_protocol)
+	{
+	static struct mystr s_log_str;
+	if (str_equal_text(p_cmd_str, "PASS"))
+	{
+	str_alloc_text(&s_log_str, "PASS <password>");
+	}
+	else
+	{
+	str_copy(&s_log_str, p_cmd_str);
+	if (!str_isempty(p_arg_str))
+	{
+	str_append_char(&s_log_str, ' ');
+	str_append_str(&s_log_str, p_arg_str);
+	}
+	}
+	*/
+}
+
+

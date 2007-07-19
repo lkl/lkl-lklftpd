@@ -1,6 +1,7 @@
 // main FTP protocol loop handling
 #include <apr_network_io.h>
 #include <apr_errno.h>
+#include <apr_strings.h>
 
 #include "worker.h"
 #include "config.h"
@@ -20,13 +21,12 @@ static apr_status_t emit_greeting(struct lfd_sess * p_sess)
 	return rc;
 }
 
-static apr_status_t parse_username_password(struct lfd_sess* sess)
+
+/*static apr_status_t parse_username_password(struct lfd_sess* sess)
 {
-	return APR_SUCCESS;
-}
-/*
-static apr_status_t parse_username_password(struct lfd_sess* sess)
-{
+	int pass_ok, user_ok;
+	pass_ok = 0;
+	user_ok=0;
 	while (1)
 	{
 	vsf_cmdio_get_cmd_and_arg(p_sess, &p_sess->ftp_cmd_str,
@@ -66,18 +66,68 @@ static apr_status_t parse_username_password(struct lfd_sess* sess)
 			"Please login with USER and PASS.");
 	}
 	}
+}*/
+
+static int handle_user_cmd(struct lfd_sess* p_sess)
+{
+if(0 == apr_strnatcasecmp(p_sess->user, p_sess->ftp_arg_str)) {
+	lfd_cmdio_write(p_sess, FTP_GIVEPWORD, "Password required for user.");
+	return 1;
 }
-*/
+else
+	return 0;
+}
+
+static int handle_pass_cmd(struct lfd_sess* p_sess)
+{
+if(0 == apr_strnatcasecmp(p_sess->passwd, p_sess->ftp_arg_str) )
+	return 1;
+else
+	return 0;
+}
+
+static apr_status_t get_username_password(struct lfd_sess* p_sess)
+{
+	int pass_ok, user_ok;
+
+	pass_ok = 0;
+	user_ok = 0;
+	while (!pass_ok || !user_ok)
+	{
+		lfd_cmdio_get_cmd_and_arg(p_sess, &p_sess->ftp_cmd_str,
+					&p_sess->ftp_arg_str, 1);
+		if (0 == apr_strnatcasecmp(p_sess->ftp_cmd_str, "USER"))
+		{
+			user_ok = handle_user_cmd(p_sess);
+		}
+		else if (0 == apr_strnatcasecmp(p_sess->ftp_cmd_str, "PASS") )
+		{
+			//handle pass command
+			pass_ok = handle_pass_cmd(p_sess);
+		}
+		else
+		{
+			// unknown command; send error message
+			lfd_cmdio_write(p_sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
+		}
+		if(!pass_ok || !user_ok)
+			lfd_cmdio_write(p_sess, FTP_LOGINERR, "Not logged in.");
+	
+	}
+	return APR_SUCCESS;
+}
 
 static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 {
 	return APR_SUCCESS;
 }
+
 void * lfd_worker_protocol_main(apr_thread_t * thd, void* param)
 {
 	apr_status_t	rc;
 	apr_socket_t 	* sock = (apr_socket_t*) param;
 	struct lfd_sess * sess;
+
 	rc = lfd_sess_create(&sess, thd, sock);
 	if(APR_SUCCESS != rc)
 	{
@@ -97,9 +147,9 @@ void * lfd_worker_protocol_main(apr_thread_t * thd, void* param)
 
 	if(APR_SUCCESS == rc)
 	{
-		rc = parse_username_password(sess);
+		rc = get_username_password(sess);
 		if(APR_SUCCESS != rc)
-			lfd_log(LFD_ERROR, "parse_username_password failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+			lfd_log(LFD_ERROR, "get_username_password failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
 	}
 
 
@@ -109,9 +159,8 @@ void * lfd_worker_protocol_main(apr_thread_t * thd, void* param)
 		if(APR_SUCCESS != rc)
 			lfd_log(LFD_ERROR, "ftp_protocol_loop failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
 	}
-
+	
 
 	lfd_sess_destroy(sess);
 	return NULL;
 }
-
