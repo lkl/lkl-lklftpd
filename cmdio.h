@@ -17,6 +17,6 @@ apr_status_t lfd_cmdio_write(struct lfd_sess * p_sess, int cmd, const char *msg,
 	p_arg_str - Where to put the FTP argument string (may be empty)
 	set_alarm - If true, the control connection inactivity monitor is used
 **/
-void lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str, char** p_arg_str, int set_alarm);
+apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str, char** p_arg_str, int set_alarm);
 
 #endif//LKLFTPD_CMDIO_H__

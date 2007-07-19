@@ -53,31 +53,35 @@ apr_status_t lfd_cmdio_write(struct lfd_sess * sess, int cmd, const char *msg, .
 	return rc;
 }
 
-void lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str, char** p_arg_str, int set_alarm)
+apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str, char** p_arg_str, int set_alarm)
 {
-	/* Prepare an alarm to timeout the session.. */
-
-	/* Blocks */
-	/*control_getline(p_cmd_str, p_sess);
-	str_split_char(p_cmd_str, p_arg_str, ' ');
-	str_upper(p_cmd_str);
-	if (tunable_log_ftp_protocol)
+	apr_status_t ret;
+	char *buffer;
+	char *cmd_body, *cmd_arg;
+	char ** last;
+	const char *sep =" \r\n";
+	apr_size_t len = 100;
+	cmd_body = NULL;
+	cmd_arg = NULL;
+	
+	buffer = apr_pcalloc(p_sess->temp_pool,100);
+	
+	ret = apr_socket_recv(p_sess->comm_sock, buffer,&len);
+	printf("\n%s\n",buffer);
+	if (APR_EOF == ret || 0 == len) 
 	{
-	static struct mystr s_log_str;
-	if (str_equal_text(p_cmd_str, "PASS"))
-	{
-	str_alloc_text(&s_log_str, "PASS <password>");
+                return APR_INCOMPLETE;
 	}
+	// parse the command
+	cmd_body = apr_strtok(buffer, sep, last);
+	if(NULL != cmd_body)
+		cmd_arg = apr_strtok(NULL, sep, last);
 	else
-	{
-	str_copy(&s_log_str, p_cmd_str);
-	if (!str_isempty(p_arg_str))
-	{
-	str_append_char(&s_log_str, ' ');
-	str_append_str(&s_log_str, p_arg_str);
-	}
-	}
-	*/
+		ret=APR_INCOMPLETE;
+	*p_cmd_str = cmd_body;
+	*p_arg_str = cmd_arg;
+	
+	return ret;
 }
 
 
