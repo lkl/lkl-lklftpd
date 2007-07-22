@@ -5,7 +5,7 @@
 #include "cmdio.h"
 
 /**
-	Handles client commands and other related stuff 
+	Handles client commands and other related stuff
 **/
 
 static void cmd_to_str(int cmd, char * buff)
@@ -42,12 +42,12 @@ apr_status_t lfd_cmdio_write(struct lfd_sess * sess, int cmd, const char *msg, .
 	if(NULL != buff)
 	{
 		rc = apr_socket_send(sess->comm_sock, buff, &len);
-/*		if(APR_SUCCESS != rc)
+		if(APR_SUCCESS == rc)
 		{
 			len = 1;
-			buff = "\r";
+			buff = "\n";
 			rc = apr_socket_send(sess->comm_sock, buff, &len);
-		}*/
+		}
 	}
 	va_end(ap);
 	return rc;
@@ -59,30 +59,38 @@ apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str
 	char *buffer;
 	char *cmd_body, *cmd_arg;
 	char * last;
-	char sep =' ';
+	const char *sep =" \r\n";
 	apr_size_t len = 100;
 	cmd_body = NULL;
 	cmd_arg = NULL;
-	
+
 	buffer = apr_pcalloc(p_sess->temp_pool,100);
-	last =  apr_pcalloc(p_sess->temp_pool,100);
+
 	ret = apr_socket_recv(p_sess->comm_sock, buffer,&len);
 
-	if (APR_EOF == ret || 0 == len) 
+	if (0 == len)
 	{
-                return APR_INCOMPLETE;
+                return APR_EOF;
 	}
-	// parse the command
-	cmd_body = apr_strtok(buffer, &sep, &last);
-	
-	if(NULL != cmd_body)
-		cmd_arg = apr_strtok(NULL, &sep, &last);
-	else
-		ret=APR_INCOMPLETE;
+	if(APR_SUCCESS != ret)
+	{
+		return ret;
+	}
 
+	// parse the command
+	cmd_body = apr_strtok(buffer, sep, &last);
+	if(NULL != cmd_body)
+	{
+		buffer = last;
+		cmd_arg = apr_strtok(buffer, sep, &last);
+	}
+	else
+	{
+		ret=APR_INCOMPLETE;
+	}
 	*p_cmd_str = cmd_body;
 	*p_arg_str = cmd_arg;
-	
+
 	return ret;
 }
 

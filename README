@@ -6,8 +6,11 @@ APR:
 	documentation about the library API: http://apr.apache.org/docs/apr/1.2/modules.html
 
 LKL:
-	it's not used currently. I'm just trying to get the FTP daemon to work with native files.
-	After I'll get this done, I'll add LKL calls.
+	To access the lkl functions define: LKL_FILE_APIS before compiling.
+	when LKL_FILE_APIS is:
+	 a) undefined: lkl_file_t is mapped to apr_file_t (using system calls)
+	 a)   defined: lkl_file_t uses sys_* functions from the lkl.
+
 
 Design:
 	The main thread waits for connection on a given port.

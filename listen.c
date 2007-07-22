@@ -34,9 +34,9 @@ static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 		{
 			lfd_log(LFD_ERROR, "apr_socket_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
 		}
-
 		else
 		{
+			apr_socket_opt_set(listen_sock, APR_SO_REUSEADDR, 1);
 			rc = apr_socket_bind(listen_sock, saddr);
 			if(APR_SUCCESS != rc)
 			{
@@ -46,7 +46,6 @@ static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 			else
 			{
 				break;
-				//###:does a socket support multiple bind()s?
 			}
 		}
 		saddr = saddr->next;
@@ -118,7 +117,7 @@ void lfd_connect(apr_socket_t ** pconnect_sock,apr_sockaddr_t * saddr, apr_pool_
 {
 	apr_status_t rc;
 	apr_socket_t * connect_sock;
-	
+
 	*pconnect_sock = NULL;
 	rc = apr_socket_create(&connect_sock, saddr->family, SOCK_STREAM, APR_PROTO_TCP, mp);
 	if(APR_SUCCESS != rc)

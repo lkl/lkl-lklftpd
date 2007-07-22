@@ -19,13 +19,13 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 	}
 
 	rc = apr_pool_create(&tmp_pool, sess_pool);
-	
+
 	if(APR_SUCCESS != rc)
 	{
 		lfd_log(LFD_ERROR, "lfd_sess_create could not create temporary pool. Errorcode: %d", rc);
 		return rc;
 	}
-	
+
 	*plfd_sess = sess = apr_pcalloc(sess_pool, sizeof(struct lfd_sess));
 
 	sess->sess_pool = sess_pool;
@@ -34,9 +34,9 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 	sess->comm_sock = sock;
 	sess->dbg_strerror_buffer = apr_pcalloc(sess_pool, STR_ERROR_MAX_LEN);
 
-	// read user/pass from config file, or let them by default 
-	sess->user="test";
-	sess->passwd=" ";
+	// read user/pass from config file, or let them by default
+	sess->user="gringo";
+	sess->passwd="pass";
 	return APR_SUCCESS;
 }
 

@@ -4,6 +4,7 @@
 #include <apr_pools.h>
 
 
+extern int lfd_config_max_login_attempts;
 extern int lfd_config_listen_port;
 extern const char * lfd_config_listen_host;
 extern const char * lfd_config_banner_string;

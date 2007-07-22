@@ -1,9 +1,17 @@
-DEPS=listen.o main.o worker.o utils.o config.o cmdio.o sess.o
+DEPS=listen.o main.o worker.o utils.o config.o cmdio.o sess.o fileops.o
+
+DEFINE_PREFIX=-D
+INCLUDE_PREFIX=-I
 
 GCC=gcc
 RMF=rm -f
 
-CFLAGS=-g -Wall -Werror -Wformat -Wstrict-prototypes -I/usr/include/apr-1.0/ -D_LARGEFILE64_SOURCE
+LKL_DEFINES=$(DEFINE_PREFIX)_LARGEFILE64_SOURCE
+#uncoment the next line to get LKL's file APIs
+LKL_DEFINES+=$(DEFINE_PREFIX)LKL_FILE_APIS
+
+
+CFLAGS=-g -Wall -Werror -Wformat -Wstrict-prototypes -I/usr/include/apr-1.0/ $(LKL_DEFINES)
 LDFLAGS=-lapr-1 -lpthread
 
 TARGET=daemon
