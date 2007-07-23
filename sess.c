@@ -33,8 +33,7 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 	sess->temp_pool = tmp_pool;
 	sess->comm_sock = sock;
 	sess->dbg_strerror_buffer = apr_pcalloc(sess_pool, STR_ERROR_MAX_LEN);
-	
-	apr_atomic_init(sess_pool);
+
 	sess->data_conn = apr_pcalloc(sess_pool, sizeof(struct lfd_data_sess));
 
 	// read user/pass from config file, or let them by default
@@ -64,9 +63,9 @@ apr_status_t lfd_data_sess_create(struct lfd_data_sess ** plfd_data_sess, apr_th
 	data_sess = *plfd_data_sess;
 	// create a data connection
 	data_pool = apr_thread_pool_get(thd);
-	
+
 	data_sess->data_conn_th = thd;
-	data_sess->data_pool = data_pool;	
+	data_sess->data_pool = data_pool;
 	data_sess->data_sock = sock;
 	data_sess->in_progress = 0;
 	return APR_SUCCESS;

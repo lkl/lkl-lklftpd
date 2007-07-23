@@ -30,7 +30,7 @@ int main(int argc, char const *const * argv, char const *const * engv)
 		return 2;
 	}
 
-
+	apr_atomic_init(root_pool);
 	lfd_listen(root_pool);
 
 	apr_pool_destroy(root_pool);
