@@ -19,7 +19,7 @@ TARGET=daemon
 .c.o:
 	$(GCC) -c $(CFLAGS) $^
 
-build:$(DEPS)
+$(TARGET) build:$(DEPS)
 	$(GCC) -o $(TARGET) $(DEPS) $(LDFLAGS)
 
 clean:
