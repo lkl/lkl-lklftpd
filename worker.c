@@ -276,7 +276,6 @@ void * lfd_worker_protocol_main(apr_thread_t * thd, void* param)
 		rc = ftp_protocol_loop(sess);
 		if(APR_SUCCESS != rc)
 			lfd_log(LFD_ERROR, "ftp_protocol_loop failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
-		return NULL; // there is no point to destroy the session again
 	}
 
 	lfd_sess_destroy(sess);
