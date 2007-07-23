@@ -9,7 +9,7 @@
 #include "config.h"
 #include "utils.h"
 #include "ftpcodes.h"
-#include "cmdio.h"
+#include "cmdhandler.h"
 #include "sess.h"
 
 
@@ -21,22 +21,6 @@ static apr_status_t emit_greeting(struct lfd_sess * p_sess)
 		rc = lfd_cmdio_write(p_sess, FTP_GREET, lfd_config_banner_string);
 	}
 	return rc;
-}
-
-
-static int handle_user_cmd(struct lfd_sess* p_sess)
-{
-	return (0 == apr_strnatcasecmp(p_sess->user, p_sess->ftp_arg_str));
-}
-
-static int handle_pass_cmd(struct lfd_sess* p_sess)
-{
-	return (0 == apr_strnatcasecmp(p_sess->passwd, p_sess->ftp_arg_str) );
-}
-
-static int lfd_cmdio_cmd_equals(struct lfd_sess*sess, const char * cmd)
-{
-	return (0 == apr_strnatcasecmp(sess->ftp_cmd_str, cmd));
 }
 
 static apr_status_t get_username_password(struct lfd_sess* p_sess)
@@ -94,32 +78,6 @@ static apr_status_t get_username_password(struct lfd_sess* p_sess)
 		return APR_EINVAL;
 
 	return APR_SUCCESS;
-}
-
-static apr_status_t handle_passive(struct lfd_sess * sess)
-{
-	//TODO:implement
-	return APR_SUCCESS;
-}
-
-static apr_status_t handle_active(struct lfd_sess * sess)
-{
-	//TODO:implement
-	return APR_SUCCESS;
-}
-static apr_status_t handle_syst(struct lfd_sess * sess)
-{
-	apr_status_t rc;
-	//TODO: check the RFC: is this the default setting. If not have it in a config file and fix the message.
-	rc = lfd_cmdio_write(sess, FTP_SYSTOK, "UNIX Type: L8");
-	return rc;
-}
-static apr_status_t handle_quit(struct lfd_sess * sess)
-{
-	apr_status_t rc;
-	//TODO: check things that need be closed.
-	rc = lfd_cmdio_write(sess, FTP_GOODBYE, "Goodbye, So long, Farwell.");
-	return rc;
 }
 
 
@@ -198,7 +156,7 @@ void sockaddr_vars_set(apr_sockaddr_t *addr, apr_port_t port, const unsigned cha
 	memcpy(addr->ipaddr_ptr, ipv4_bytes_in_network_order, 4); //only copy 4 bytes=the length of the IPv4 address
 }
 
-
+// specify an alternate data port by use of the PORT command
 static apr_status_t handle_port(struct lfd_sess* p_sess)
 {
 	unsigned short the_port;
@@ -254,14 +212,28 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 			rc = handle_quit(sess);
 			return rc;
 		}
+		else if(lfd_cmdio_cmd_equals(sess, "ABOR"))
+		{
+			rc = handle_abort(sess);
+		}
 		else if(lfd_cmdio_cmd_equals(sess, "PORT"))
 		{
 			rc = handle_port(sess);
 			return rc;
 		}
+
+		else if(lfd_cmdio_cmd_equals(sess, "RMD"))
+		{
+			rc = handle_dir_remove(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "MKD"))
+		{
+			rc = handle_dir_create(sess);
+		}
 		else //default
 		{
 			printf("The cmd [%s] has no installed handler! \n", sess->ftp_cmd_str);
+			lfd_cmdio_write(sess, FTP_COMMANDNOTIMPL, "Command not implemented.");
 		}
 	}
 	return rc;
@@ -304,6 +276,7 @@ void * lfd_worker_protocol_main(apr_thread_t * thd, void* param)
 		rc = ftp_protocol_loop(sess);
 		if(APR_SUCCESS != rc)
 			lfd_log(LFD_ERROR, "ftp_protocol_loop failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		return NULL; // there is no point to destroy the session again
 	}
 
 	lfd_sess_destroy(sess);

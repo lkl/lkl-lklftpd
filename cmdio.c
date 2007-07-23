@@ -93,5 +93,3 @@ apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str
 
 	return ret;
 }
-
-
