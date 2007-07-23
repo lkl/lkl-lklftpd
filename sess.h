@@ -15,8 +15,11 @@ struct lfd_sess
 	char		* dbg_strerror_buffer; 	//this buffer is used to map string error numbers to error descriptions.
 	char		* user;			// the user's name for this session
 	char		* passwd;		// user's password for this session
-	char		* ftp_cmd_str;		// command body	
+	char		* ftp_cmd_str;		// command body
 	char		* ftp_arg_str;		// command argument
+
+	apr_socket_t	* pasv_listen_fd;	//PASSIVE listen descriptor
+	apr_sockaddr_t	* p_port_sockaddr;
 };
 
 apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, apr_socket_t * sock);

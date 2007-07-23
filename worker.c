@@ -98,11 +98,13 @@ static apr_status_t get_username_password(struct lfd_sess* p_sess)
 
 static apr_status_t handle_passive(struct lfd_sess * sess)
 {
+	//TODO:implement
 	return APR_SUCCESS;
 }
 
 static apr_status_t handle_active(struct lfd_sess * sess)
 {
+	//TODO:implement
 	return APR_SUCCESS;
 }
 static apr_status_t handle_syst(struct lfd_sess * sess)
@@ -115,9 +117,116 @@ static apr_status_t handle_syst(struct lfd_sess * sess)
 static apr_status_t handle_quit(struct lfd_sess * sess)
 {
 	apr_status_t rc;
+	//TODO: check things that need be closed.
 	rc = lfd_cmdio_write(sess, FTP_GOODBYE, "Goodbye, So long, Farwell.");
 	return rc;
 }
+
+
+/**
+*@brief parses a string of delimited numbers between 0 and 255 and stores them in the p_items buffer
+*/
+const unsigned char * lkl_str_parse_uchar_string_sep(
+  char * input_str, char sep, unsigned char* p_items,
+  unsigned int items)
+{
+	char * last, * str;
+	unsigned int i;
+	apr_status_t rc;
+	char sep_str[] = " ";
+	sep_str[0] = sep;
+
+	last = input_str;
+	for (i = 0; i < items; i++)
+	{
+		apr_off_t this_number;
+
+		str = apr_strtok(input_str, sep_str, &last);
+		if((NULL == str) || ('\0' == *str))
+			return 0;
+
+		/* Sanity - check for too many or two few tokens! */
+		if (    (i <  (items-1) && (0 == strlen(last))) ||
+			(i == (items-1) && (0 != strlen(last))))
+		{
+			return 0;
+		}
+
+		rc = apr_strtoff(&this_number, input_str, NULL, 10);
+		if(APR_SUCCESS != rc)
+			return 0;
+
+		// validate range fits into one byte
+		if(this_number < 0 || this_number > 255)
+			return 0;
+
+		/* If this truncates from int to uchar, we don't care */
+		p_items[i] = (unsigned char) this_number;
+
+		/* The right hand side of the comma now becomes the new string to breakdown */
+		input_str = last;
+	}
+	return p_items;
+}
+
+static void port_cleanup(struct lfd_sess* p_sess)
+{
+	p_sess->p_port_sockaddr = NULL;
+	//vsf_sysutil_sockaddr_clear(&p_sess->p_port_sockaddr);
+}
+
+static void pasv_cleanup(struct lfd_sess* p_sess)
+{
+	if (NULL != p_sess->pasv_listen_fd)
+	{
+		apr_socket_close(p_sess->pasv_listen_fd);
+		p_sess->pasv_listen_fd = NULL;
+	}
+}
+
+void sockaddr_vars_set(apr_sockaddr_t *addr, apr_port_t port, const unsigned char * ipv4_bytes_in_network_order)
+{
+	addr->family = APR_INET;
+	addr->sa.sin.sin_family = APR_INET;
+	addr->sa.sin.sin_port = htons(port);
+	addr->port = port;
+
+	addr->salen = sizeof(struct sockaddr_in);
+	addr->addr_str_len = 16;
+	addr->ipaddr_ptr = &(addr->sa.sin.sin_addr);
+	addr->ipaddr_len = sizeof(struct in_addr);
+	memcpy(addr->ipaddr_ptr, ipv4_bytes_in_network_order, 4); //only copy 4 bytes=the length of the IPv4 address
+}
+
+
+static apr_status_t handle_port(struct lfd_sess* p_sess)
+{
+	unsigned short the_port;
+	unsigned char vals[6];
+	const unsigned char* p_raw;
+	struct apr_sockaddr_t * saddr;
+	pasv_cleanup(p_sess);
+	port_cleanup(p_sess);
+	p_raw = lkl_str_parse_uchar_string_sep(p_sess->ftp_arg_str, ',', vals, sizeof(vals));
+	if (p_raw == 0)
+	{
+		lfd_cmdio_write(p_sess, FTP_BADCMD, "Illegal PORT command.");
+		return APR_EINVAL;
+	}
+	the_port = vals[4] << 8;
+	the_port |= vals[5];
+	saddr = apr_pcalloc(p_sess->sess_pool, sizeof(struct apr_sockaddr_t));
+
+	//The PORT command supports IPv4 only
+	saddr->pool = p_sess->sess_pool;
+	sockaddr_vars_set(saddr, the_port, vals);
+
+	p_sess->p_port_sockaddr = saddr;
+	lfd_cmdio_write(p_sess, FTP_PORTOK, "PORT command successful. Consider using PASV.");
+	return APR_SUCCESS;
+}
+
+
 
 static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 {
@@ -143,6 +252,11 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		else if(lfd_cmdio_cmd_equals(sess, "QUIT"))
 		{
 			rc = handle_quit(sess);
+			return rc;
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "PORT"))
+		{
+			rc = handle_port(sess);
 			return rc;
 		}
 		else //default
