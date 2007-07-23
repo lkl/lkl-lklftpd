@@ -5,6 +5,7 @@
 #include <apr.h>
 #include <apr_general.h>
 #include <apr_errno.h>
+#include <apr_atomic.h>
 
 #include "utils.h"
 #include "config.h"

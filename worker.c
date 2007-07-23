@@ -233,6 +233,8 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		else //default
 		{
 			printf("The cmd [%s] has no installed handler! \n", sess->ftp_cmd_str);
+			if(NULL != sess->ftp_arg_str)
+				printf("The cmd args were [%s] \n", sess->ftp_arg_str);
 			lfd_cmdio_write(sess, FTP_COMMANDNOTIMPL, "Command not implemented.");
 		}
 	}
@@ -253,7 +255,7 @@ void * lfd_worker_protocol_main(apr_thread_t * thd, void* param)
 		lfd_log(LFD_ERROR, "lfd_sess_create failed with errorcode %d", rc);
 		return NULL;
 	}
-	//if any of the following commands fail, the session obliteratoin code at the end is ran.
+	//if any of the following stages fail, the session obliteration code at the end is run.
 
 	if(APR_SUCCESS == rc)
 	{
