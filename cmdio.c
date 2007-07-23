@@ -60,11 +60,11 @@ apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str
 	char *cmd_body, *cmd_arg;
 	char * last;
 	const char *sep =" \r\n";
-	apr_size_t len = 100;
+	apr_size_t len = cmd_input_buffer_len;
 	cmd_body = NULL;
 	cmd_arg = NULL;
 
-	buffer = apr_pcalloc(p_sess->temp_pool,100);
+	buffer = p_sess->cmd_input_buffer;
 
 	ret = apr_socket_recv(p_sess->comm_sock, buffer,&len);
 

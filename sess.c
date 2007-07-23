@@ -1,6 +1,8 @@
 #include "sess.h"
 #include "utils.h"
 
+const size_t cmd_input_buffer_len = 100;
+
 apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, apr_socket_t * sock)
 {
 	apr_pool_t	* sess_pool;
@@ -30,7 +32,7 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 
 	sess->sess_pool = sess_pool;
 	sess->loop_pool = loop_pool;
-	sess->temp_pool = tmp_pool;
+	sess->cmd_input_buffer = apr_pcalloc(sess_pool, cmd_input_buffer_len);
 	sess->comm_sock = sock;
 	sess->dbg_strerror_buffer = apr_pcalloc(sess_pool, STR_ERROR_MAX_LEN);
 
