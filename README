@@ -1,20 +1,48 @@
 A LKL and APR based FTP daemon.
 
-APR:
-	to build it you'll need libapr1 http://apr.apache.org/
-	on Ubuntu/Debian just do: apt-get install libapr1-dev
-	documentation about the library API: http://apr.apache.org/docs/apr/1.2/modules.html
+Prerequisites:
+	a) APR library - The Apache Portable Runtime Library.
+		- a set of minimalistic C wrappers over system calls
+		  that permits writing portable and fast code in C.
+		- on Debian/Ubuntu just do [sudo] apt-get install libapr1-dev.
+		  You'll need to install the "-dev" package to get the header files.
+		  LKLFTPD (currently) looks for the headers in /usr/include/apr-1.0/;
+		  you may need to tweak this on your system.
+		- a 1.2.1 or better version will do just fine (but later versions
+		  have more bugfixes and better support for some platforms).
+	b) A multi-threaded operating system.
+		LKLFTPD starts at least one new thread per client.
+	c) LKL - if you want to run LKLFTPD through LKL you'll obviously need LKL.
+		- check on http://cs.pub.ro/~ixlabs/?page_id=134 for details about LKL.
 
-LKL:
-	To access the lkl functions define: LKL_FILE_APIS before compiling.
-	when LKL_FILE_APIS is:
-	 a) undefined: lkl_file_t is mapped to apr_file_t (using system calls)
-	 a)   defined: lkl_file_t uses sys_* functions from the lkl.
+Documentation:
+	a) APR - http://apr.apache.org/docs/apr/1.2/modules.html
+	b) LKL - http://cs.pub.ro/~ixlabs/?page_id=134
 
 
 Design:
-	The main thread waits for connection on a given port.
-	Each accepted connection is handled on a separate thread.
-	Data relevant to the connection is held in a lfd_sess structure,
-	and a pointer to this structure is passed to all functions
-	called from the connection loop.
+	LISTENER-THREAD - main thread
+	- waits for connection on a given TCP port (standart default: 21).
+	WORKER-THREADS - for each accepted connection we start a new thread.
+	- all commands issued by the client are handled on this separate thread.
+	- for data transmissions other threads may be started durring the
+	  lifetime of the client
+	- data relevant to the connection is held in a lfd_sess structure,
+	  and a pointer to this structure is passed to all functions
+	  called from the connection command loop.
+
+
+
+LKL:
+	To aid developement and o give LKLFTPD more functionality we have wrapped
+	  all file IO functions under lkl_file_t based operations.
+	These are by default mapped "1-1" to apr_file_t, but by defining LKL_FILE_APIS at
+	  compile time you can use lkl based file IO.
+	a) If LKL_FILE_APIS is NOT DEFINED (which means lkl_file_t is defined as apr_file_t)
+	     you will use the OS APIs to access files.
+	     No LKL code is run/called. You need not link to liblkl.
+	     In this mode you can use LKLFTPD as a standalone ftp server.
+	b) If LKL_FILE_APIS is DEFINED, lkl_file_t is implemented as a wrapper
+	     over LKL's sys_* functions. In this mode you'll need to link to LKL.
+	     You'll be bound to Linux' licence (currently GPLv2) by linking
+	     directly to Linux code.
