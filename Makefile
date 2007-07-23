@@ -12,7 +12,7 @@ LKL_DEFINES+=$(DEFINE_PREFIX)LKL_FILE_APIS
 
 
 CFLAGS=-g -Wall -Werror -Wformat -Wstrict-prototypes -I/usr/include/apr-1.0/ $(LKL_DEFINES)
-LDFLAGS=-lapr-1 -lpthread
+LDFLAGS=-lapr-1
 
 TARGET=daemon
 
