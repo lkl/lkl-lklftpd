@@ -2,7 +2,7 @@
 #include "utils.h"
 #include <stdarg.h>
 #include <stdio.h>
-
+#include <stdlib.h>
 
 
 char* lfd_apr_strerror_thunsafe(apr_status_t rc)
@@ -21,3 +21,9 @@ void lfd_log(enum err_levels lvl, char * fmt, ...)
 	printf("\n");
 	va_end(ap);
 }
+void bug(const char* p_text)
+{
+	printf("%s\n", p_text);
+	exit(1);
+}
+

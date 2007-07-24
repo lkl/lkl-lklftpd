@@ -41,6 +41,7 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 	// read user/pass from config file, or let them by default
 	sess->user="gringo";
 	sess->passwd="pass";
+	sess->home_str = "/home/gringo/";
 	return APR_SUCCESS;
 }
 

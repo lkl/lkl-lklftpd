@@ -13,6 +13,7 @@ enum err_levels
 
 void lfd_log(enum err_levels lvl, char * fmt, ...);
 char* lfd_apr_strerror_thunsafe(apr_status_t rc);
+void bug(const char* p_text);
 
 #endif//LKLFTPD_UTILS_H__
 

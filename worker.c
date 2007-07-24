@@ -219,9 +219,7 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		else if(lfd_cmdio_cmd_equals(sess, "PORT"))
 		{
 			rc = handle_port(sess);
-			return rc;
 		}
-
 		else if(lfd_cmdio_cmd_equals(sess, "RMD"))
 		{
 			rc = handle_dir_remove(sess);
@@ -230,6 +228,15 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		{
 			rc = handle_dir_create(sess);
 		}
+		else if(lfd_cmdio_cmd_equals(sess, "TYPE"))
+		{
+			rc = handle_type(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "RETR"))
+		{
+			rc = handle_retr(sess);
+		}
+
 		else //default
 		{
 			printf("The cmd [%s] has no installed handler! \n", sess->ftp_cmd_str);
