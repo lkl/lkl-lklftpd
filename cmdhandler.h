@@ -16,6 +16,7 @@ apr_status_t handle_abort(struct lfd_sess* p_sess);
 apr_status_t handle_dir_remove(struct lfd_sess *psess);
 apr_status_t handle_dir_create(struct lfd_sess *psess);
 apr_status_t handle_type(struct lfd_sess *psess);
+apr_status_t handle_port(struct lfd_sess* p_sess);
 apr_status_t handle_retr(struct lfd_sess *sess);
 
 #endif//LKLFTPD_CMDHANDLER_H__
