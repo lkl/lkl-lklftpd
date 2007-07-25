@@ -492,7 +492,7 @@ apr_status_t lkl_temp_dir_get(const char **temp_dir,
 }
 #endif
 
-#endif  /* ! APR_FILE_IO_H */
+//#endif  /* ! APR_FILE_IO_H */
 
 
 

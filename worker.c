@@ -120,11 +120,22 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "RMD"))
 		{
+			printf("cmd [%s] args: [%s] \n",sess->ftp_cmd_str, sess->ftp_arg_str);
 			rc = handle_dir_remove(sess);
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "MKD"))
 		{
+			printf("cmd [%s] args: [%s] \n",sess->ftp_cmd_str, sess->ftp_arg_str);
 			rc = handle_dir_create(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "PWD"))
+		{
+			rc = handle_pwd(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "CWD"))
+		{
+			printf("cmd [%s] args: [%s] \n",sess->ftp_cmd_str, sess->ftp_arg_str);
+			rc = handle_cwd(sess);
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "TYPE"))
 		{
