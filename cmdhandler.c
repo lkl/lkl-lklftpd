@@ -89,8 +89,8 @@ apr_status_t handle_dir_remove(struct lfd_sess *p_sess)
 	}
 	else
 	{
-		if(NULL != p_sess->rel_path)
-			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path, p_sess->ftp_arg_str, NULL);
+		if(0 != apr_strnatcmp(p_sess->rel_path,"/"))
+			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1, p_sess->ftp_arg_str, NULL);
 		else
 			path = apr_pstrcat(p_sess->loop_pool,p_sess->home_str, p_sess->ftp_arg_str, NULL);
 	}
@@ -99,11 +99,12 @@ apr_status_t handle_dir_remove(struct lfd_sess *p_sess)
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
+	
 	ret = lkl_dir_remove(path,p_sess->loop_pool);
-	lfd_log(LFD_ERROR, "lkl_dir_remove failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
+	
 	if(APR_SUCCESS != ret)
 	{
-		lfd_log(LFD_ERROR, "lkl_dir_make failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
+		lfd_log(LFD_ERROR, "lkl_dir_remove failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
 		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot remove directory %s.", p_sess->ftp_arg_str);
 	}
 	else
@@ -131,8 +132,8 @@ apr_status_t handle_dir_create(struct lfd_sess *p_sess)
 	}
 	else
 	{
-		if(NULL != p_sess->rel_path)
-			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path, p_sess->ftp_arg_str, NULL);
+		if(0 != apr_strnatcmp( p_sess->rel_path, "/"))
+			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1, p_sess->ftp_arg_str, NULL);
 		else
 			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str, NULL);
 	}
@@ -148,7 +149,7 @@ apr_status_t handle_dir_create(struct lfd_sess *p_sess)
 		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot create directory %s.", p_sess->ftp_arg_str);
 	}
 	else
-		ret = lfd_cmdio_write(p_sess, FTP_MKDIROK, "Directory created.");
+		ret = lfd_cmdio_write(p_sess, FTP_MKDIROK, "%s/%s Directory created.",p_sess->rel_path, p_sess->ftp_arg_str);
 
 	return ret;
 }
@@ -156,12 +157,25 @@ apr_status_t handle_dir_create(struct lfd_sess *p_sess)
 apr_status_t handle_pwd(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
-		
-	if(NULL == p_sess->rel_path)
-		ret = lfd_cmdio_write(p_sess, FTP_PWDOK, "/");
-	else
-		ret = lfd_cmdio_write(p_sess, FTP_PWDOK, "/%s", p_sess->rel_path);
+	
+	ret = lfd_cmdio_write(p_sess, FTP_PWDOK,p_sess->rel_path);
 	return ret;
+}
+
+static apr_status_t dir_exists(const char * path, apr_pool_t * pool)
+{
+	apr_finfo_t finfo;
+	apr_status_t ret;
+	// TODO - check if the given path represents a real directory
+	
+	ret = apr_stat(&finfo, path, APR_FINFO_TYPE, pool);
+	if( ret == APR_SUCCESS || ret == APR_INCOMPLETE )
+	{
+		if (finfo.valid & APR_FINFO_TYPE)
+			if(finfo.filetype == APR_DIR)
+				return APR_SUCCESS;
+	}
+	return APR_EINVAL;
 }
 
 apr_status_t handle_cwd(struct lfd_sess *p_sess)
@@ -180,7 +194,10 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 	if('/' == *(p_sess->ftp_arg_str))
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
 	else
-		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path, p_sess->ftp_arg_str, NULL);
+		if(0 ==apr_strnatcmp(p_sess->rel_path, "/"))
+			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str, NULL);
+	else
+		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1, p_sess->ftp_arg_str, NULL);
 	
 	if(NULL == path)
 	{
@@ -189,63 +206,130 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 	}
 	
 	// verify that the path represents a valid directory
-	//TODO
-	// ret = ??
+	ret = dir_exists(path, p_sess->loop_pool);
+
 	if(APR_SUCCESS == ret)
 	{
 		// add to the current rel_path ftp_arg_str
 		if('/' == *(p_sess->ftp_arg_str))
-			path = p_sess->ftp_arg_str;
-		else
-			path = apr_pstrcat(p_sess->sess_pool, p_sess->rel_path, p_sess->ftp_arg_str, NULL);
-		if(NULL == path)
-		{
-			lfd_cmdio_write(p_sess, FTP_BADOPTS, "Server has encountered an internal error.");
-			return APR_EINVAL;
-		}
-		p_sess->rel_path = path;
-		ret = lfd_cmdio_write(p_sess, FTP_CWDOK, "Directory changed to %s.", path);
+			p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"%s",p_sess->ftp_arg_str);
+		else if( 0 == apr_strnatcmp(p_sess->rel_path,"/"))
+			p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"/%s", p_sess->ftp_arg_str);
+		else 
+			p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"%s/%s", p_sess->rel_path, p_sess->ftp_arg_str);
+		
+		ret = lfd_cmdio_write(p_sess, FTP_CWDOK, "Directory changed to %s.", p_sess->rel_path);
 	}
-
+	else 
+	{
+		lfd_log(LFD_ERROR, "dir_exists failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
+		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot change directory.");
+	}
 	return ret;
 }
 
-apr_status_t handle_cdup(struct lfd_sess *sess)
+apr_status_t handle_cdup(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
-
+	char * pos, * last;
+	
 	ret = APR_SUCCESS;
 	// shouldn't have an argument
+	// changes the current directory with it's parent
+	if(0 == apr_strnatcmp( p_sess->rel_path, "/"))
+	{
+		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Already in root directory.");
+		return ret;
+	}
+	pos = p_sess->rel_path;
+	last = pos;
+	while(*pos)
+	{
+		if(*pos == '/')
+			last = pos;
+		pos++; 
+	}
+	// end the string here, before pos 
+	if(last == p_sess->rel_path)
+		p_sess->rel_path = "/";
+	else
+		*last = '\0';
 	
-	//TODO
+	ret = lfd_cmdio_write(p_sess, FTP_ALLOOK, "Changed to directory %s.",p_sess->rel_path);
 	return ret;
 }
 
-apr_status_t handle_rnfr(struct lfd_sess *sess)
+apr_status_t handle_rnfr(struct lfd_sess *p_sess, char ** temp_path)
 {
 	apr_status_t ret;
-
+	char * path;
+	
+	*temp_path = NULL;
 	ret = APR_SUCCESS;
-	if(NULL == sess->ftp_arg_str)
+	if(NULL == p_sess->ftp_arg_str)
 	{
-		ret = lfd_cmdio_write(sess, FTP_BADOPTS, "Bad command argument.");
+		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Bad command argument.");
 		return ret;
 	}
-	//TODO
+	
+	//check if the argument is a valid path 
+	if('/' == *(p_sess->ftp_arg_str))
+		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
+	else
+		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path, p_sess->ftp_arg_str, NULL);
+	if(NULL == path)
+	{
+		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
+		return APR_EINVAL;
+	}
+	
+	ret = dir_exists(path, p_sess->loop_pool);
+
+	if(APR_SUCCESS == ret)
+	{
+		*temp_path = path;
+		ret = lfd_cmdio_write(p_sess, FTP_RNFROK, "Rename from ok.");
+	}
+	else
+	{
+		lfd_log(LFD_ERROR, "dir_exists failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
+		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot rename directory %s.", p_sess->ftp_arg_str);
+	}
 	return ret;
 }
 	
-apr_status_t handle_rnto(struct lfd_sess *sess)
+apr_status_t handle_rnto(struct lfd_sess *p_sess, char * old_path)
 {
 	apr_status_t ret;
+	char * path;
 
 	ret = APR_SUCCESS;
-	if(NULL == sess->ftp_arg_str)
+	if(NULL == p_sess->ftp_arg_str)
 	{
-		ret = lfd_cmdio_write(sess, FTP_BADOPTS, "Bad command argument.");
+		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Bad command argument.");
 		return ret;
 	}
-	//TODO
+	
+	// obtain the new path and call lkl_file_rename
+	if('/' == *(p_sess->ftp_arg_str))
+		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
+	else
+		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path, p_sess->ftp_arg_str, NULL);
+	if(NULL == path)
+	{
+		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
+		return APR_EINVAL;
+	}
+	
+	ret = lkl_file_rename(old_path, path, p_sess->loop_pool);
+	
+	if(APR_SUCCESS != ret)
+	{
+		lfd_log(LFD_ERROR, "lkl_file_rename failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
+		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot rename directory %s.", p_sess->ftp_arg_str);	
+	}
+	else
+		ret = lfd_cmdio_write(p_sess, FTP_RENAMEOK, "Directory was succesfully renamed.");
 	return ret;
 }
 

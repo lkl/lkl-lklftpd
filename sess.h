@@ -31,8 +31,8 @@ struct lfd_sess
 	char			* home_str;			// user's home directory. ALWAYS WITH A TRAILING SLASH!
 	char			* ftp_cmd_str;			// command body
 	char			* ftp_arg_str;			// command argument
-	char			* abs_path;			// the user's home directory path - different for each session
-	char			* rel_path;			// the path relative to the user's home directory - it may be changed by the user
+	char			* rel_path;			// the path relative to the user's home directory - it may be
+								// changed by the user;
 	apr_socket_t		* pasv_listen_fd;		//PASSIVE listen descriptor
 	apr_sockaddr_t		* p_port_sockaddr;		//port configured by PORT to be used by ### TODO insert where it's supposed to be used
 	apr_off_t		restart_pos;			//REST value.

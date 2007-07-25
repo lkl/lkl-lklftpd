@@ -1,4 +1,4 @@
-
+#include <string.h>
 #include <apr_strings.h>
 #include <apr_network_io.h>
 
@@ -65,7 +65,7 @@ apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str
 	cmd_arg = NULL;
 
 	buffer = p_sess->cmd_input_buffer;
-
+	memset(buffer, '\0', cmd_input_buffer_len);
 	ret = apr_socket_recv(p_sess->comm_sock, buffer,&len);
 
 	if (0 == len)

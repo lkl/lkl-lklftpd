@@ -137,6 +137,10 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 			printf("cmd [%s] args: [%s] \n",sess->ftp_cmd_str, sess->ftp_arg_str);
 			rc = handle_cwd(sess);
 		}
+		else if(lfd_cmdio_cmd_equals(sess, "CDUP"))
+		{
+			rc = handle_cdup(sess);
+		}
 		else if(lfd_cmdio_cmd_equals(sess, "TYPE"))
 		{
 			rc = handle_type(sess);
