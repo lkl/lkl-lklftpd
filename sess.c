@@ -42,6 +42,7 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 	sess->user="gringo";
 	sess->passwd="pass";
 	sess->home_str = "/home/gringo/";
+	sess->rel_path = "/";
 	return APR_SUCCESS;
 }
 

@@ -45,6 +45,7 @@
 #define lkl_file_mktemp		apr_file_mktemp
 #define lkl_temp_dir_get	apr_temp_dir_get
 
+#define lkl_stat		apr_stat
 #else//LKL_FILE_APIS
 
 
@@ -488,6 +489,7 @@ apr_status_t lkl_file_mktemp(lkl_file_t **fp, char *templ,
 apr_status_t lkl_temp_dir_get(const char **temp_dir,
                                            apr_pool_t *p);
 
+apr_status_t lkl_stat(apr_finfo_t *finfo, const char* fname, apr_int32_t wanted, apr_pool_t *pool);
 
 
 #ifdef __cplusplus
