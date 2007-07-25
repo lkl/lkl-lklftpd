@@ -8,7 +8,7 @@ RMF=rm -f
 
 LKL_DEFINES=$(DEFINE_PREFIX)_LARGEFILE64_SOURCE
 #uncoment the next line to get LKL's file APIs
-LKL_DEFINES+=$(DEFINE_PREFIX)LKL_FILE_APIS
+#LKL_DEFINES+=$(DEFINE_PREFIX)LKL_FILE_APIS
 
 
 CFLAGS=-g -Wall -Werror -Wformat -Wstrict-prototypes -I/usr/include/apr-1.0/ $(LKL_DEFINES)

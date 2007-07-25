@@ -3,7 +3,10 @@
 #include "cmdhandler.h"
 #include "ftpcodes.h"
 #include "utils.h"
+#include "fileops.h"
 
+//TODO: rename and move to apppropriate place
+#define VSFTP_DATA_BUFSIZE      65536
 
 int handle_user_cmd(struct lfd_sess* p_sess)
 {
@@ -294,13 +297,223 @@ static void resolve_tilde(char ** p_str, struct lfd_sess* p_sess)
 	}
 }
 
+static void init_data_sock_params(struct lfd_sess* p_sess, apr_socket_t * sock_fd)
+{
+	if (NULL != p_sess->data_conn->data_sock)
+	{
+		bug("data descriptor still present in init_data_sock_params");
+	}
+	p_sess->data_conn->data_sock = sock_fd;
+	p_sess->data_conn->in_progress = 0;
+	apr_socket_opt_set(sock_fd, APR_SO_KEEPALIVE, 1);
+
+	//Set up lingering, so that we wait for all data to transfer, and report
+	// more accurate transfer rates.
+	apr_socket_opt_set(sock_fd, APR_SO_LINGER, 1);
+}
+
+static apr_status_t get_bound_and_connected_ftp_port_sock(struct lfd_sess* p_sess, apr_socket_t ** psock)
+{
+	apr_socket_t	* sock;
+	apr_sockaddr_t	* saddr;
+	apr_status_t	  rc;
+
+	*psock = NULL;
+
+	rc = apr_sockaddr_info_get(&saddr, NULL, APR_UNSPEC, 20, 0, p_sess->loop_pool);
+	if(APR_SUCCESS != rc)
+		return rc;
+
+	rc = apr_socket_create(&sock, APR_UNSPEC, SOCK_STREAM, APR_PROTO_TCP, p_sess->loop_pool);
+	if(APR_SUCCESS != rc)
+		return rc;
+	rc = apr_socket_opt_set(sock, APR_SO_REUSEADDR, 1);
+	if(APR_SUCCESS != rc)
+		return rc;
+	rc = apr_socket_bind(sock, saddr);
+	if(APR_SUCCESS != rc)
+		return rc;
+
+	rc = apr_socket_connect (sock, p_sess->p_port_sockaddr);
+	if(APR_SUCCESS != rc)
+		return rc;
+
+	*psock = sock;
+	return APR_SUCCESS;
+}
+
+
+static apr_status_t ftpdataio_get_port_fd(struct lfd_sess* p_sess, apr_socket_t ** psock)
+{
+	apr_status_t	  rc;
+	apr_socket_t	* remote_fd;
+	*psock = NULL;
+	rc = get_bound_and_connected_ftp_port_sock(p_sess, &remote_fd);
+	if (APR_SUCCESS != rc)
+	{
+		lfd_cmdio_write(p_sess, FTP_BADSENDCONN, "Failed to establish connection.");
+		return rc;
+	}
+
+	init_data_sock_params(p_sess, remote_fd);
+	*psock = remote_fd;
+
+	return APR_SUCCESS;
+}
+
+
+static apr_socket_t* get_remote_transfer_fd(struct lfd_sess* p_sess, const char* p_status_msg)
+{
+	apr_socket_t	* remote_fd;
+
+	if (!pasv_active(p_sess) && !port_active(p_sess))
+	{
+		bug("neither PORT nor PASV active in get_remote_transfer_fd");
+	}
+	p_sess->data_conn->abor_received = 0;
+	if (pasv_active(p_sess))
+	{
+		//remote_fd = lfd_ftpdataio_get_pasv_fd(p_sess);
+	}
+	else
+	{
+		ftpdataio_get_port_fd(p_sess, & remote_fd);
+	}
+	if (NULL == remote_fd)
+	{
+		return NULL;
+	}
+	lfd_cmdio_write(p_sess, FTP_DATACONN, p_status_msg);
+	return remote_fd;
+}
+
+static apr_status_t lfd_socket_write_full(apr_socket_t * fd, const void* p_buf, apr_size_t * psize)
+{
+	apr_status_t	rc;
+	apr_size_t	num_written;
+	apr_size_t	size = *psize;
+	if (size > INT_MAX)
+	{
+		bug("size too big in vsf_sysutil_write_loop");
+	}
+
+	*psize = 0;
+	while (1)
+	{
+		num_written = size;
+		rc = apr_socket_send(fd, (const char*)p_buf + num_written, &num_written);
+		if (APR_SUCCESS != rc)
+		{
+			return rc;
+		}
+		else if (0 == num_written)
+		{
+			/* Written all we're going to write.. */
+			return APR_SUCCESS;
+		}
+
+		*psize += num_written;
+		size -= num_written;
+		if (0 == size)
+		{
+			/* Hit the write target, cool. */
+			return APR_SUCCESS;
+		}
+	}
+}
+
+struct lfd_transfer_ret
+{
+	int retval;
+	apr_size_t transferred;
+
+};
+static struct lfd_transfer_ret do_file_send_rwloop(struct lfd_sess* p_sess, apr_socket_t * sock, lkl_file_t * file_fd, int is_ascii)
+{
+	char* p_readbuf;
+	char* p_asciibuf;
+	struct lfd_transfer_ret ret_struct = { 0, 0 };
+	apr_size_t chunk_size = 4096;
+	char* p_writefrom_buf;
+	p_readbuf = apr_palloc(p_sess->loop_pool, VSFTP_DATA_BUFSIZE);
+	p_asciibuf= apr_palloc(p_sess->loop_pool, VSFTP_DATA_BUFSIZE*2);
+
+	if (is_ascii)
+	{
+		p_writefrom_buf = p_asciibuf;
+	}
+	else
+	{
+		p_writefrom_buf = p_readbuf;
+	}
+
+	while (1)
+	{
+		apr_size_t	num_to_write;
+		apr_size_t	bytes_read = chunk_size;
+		apr_size_t	bytes_written;
+		apr_status_t	rc;
+		rc = lkl_file_read(file_fd, p_readbuf, &bytes_read);
+		if((APR_SUCCESS != rc) && (APR_EOF != rc))
+		{
+			ret_struct.retval = -1;
+			return ret_struct;
+		}
+		else if (0 == bytes_read)
+		{
+			/* Success - cool */
+			return ret_struct;
+		}
+		if (is_ascii)
+		{
+			num_to_write = lfd_ascii_bin_to_ascii(p_readbuf, p_asciibuf, bytes_read);
+		}
+		else
+		{
+			num_to_write = bytes_read;
+		}
+
+		bytes_written = bytes_read;
+		rc = lfd_socket_write_full(sock, p_writefrom_buf, &bytes_written);
+		if((APR_SUCCESS != rc) || (bytes_written != bytes_read))
+		{
+			ret_struct.retval = -2;
+			return ret_struct;
+		}
+		ret_struct.transferred += bytes_written;
+	}
+}
+
+void lfd_dispose_transfer_fd(struct lfd_sess* p_sess)
+{
+
+	apr_socket_opt_set(p_sess->data_conn->data_sock, APR_SO_LINGER, 0);
+	apr_socket_close(p_sess->data_conn->data_sock);
+	p_sess->data_conn->data_sock = NULL;
+}
+
+static void check_abor(struct lfd_sess* p_sess)
+{
+	/* If the client sent ABOR, respond to it here */
+	if (p_sess->data_conn->abor_received)
+	{
+		p_sess->data_conn->abor_received = 0;
+		lfd_cmdio_write(p_sess, FTP_ABOROK, "ABOR successful.");
+	}
+}
 
 apr_status_t handle_retr(struct lfd_sess *sess)
 {/*
 	int remote_fd;
 	int opened_file;
 	int is_ascii = 0;*/
-	apr_off_t offset = sess->restart_pos;
+	char			* msg;
+	apr_off_t		  offset = sess->restart_pos;
+	apr_status_t		  rc;
+	lkl_file_t 		* file;
+	apr_socket_t		* remote_fd;
+	apr_finfo_t		  finfo;
+	struct lfd_transfer_ret   trans_ret;
 
 	sess->restart_pos = 0;
 
@@ -310,97 +523,73 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 	}
 	if (sess->is_ascii && offset != 0)
 	{
-		lfd_cmdio_write(sess, FTP_FILEFAIL,
-				"No support for resume of ASCII transfer.");
+		lfd_cmdio_write(sess, FTP_FILEFAIL, "No support for resume of ASCII transfer.");
 		return APR_EINVAL;
 	}
 	resolve_tilde(&sess->ftp_arg_str, sess);
 
 
+	rc = lkl_file_open(&file, sess->ftp_arg_str, APR_FOPEN_READ|APR_FOPEN_BINARY|APR_FOPEN_LARGEFILE|APR_FOPEN_SENDFILE_ENABLED, 0, sess->loop_pool);
+	if(APR_SUCCESS != rc)
+	{
+		lfd_cmdio_write(sess, FTP_FILEFAIL, "Failed to open file.");
+		return rc;
+	}
+	rc = apr_stat(&finfo, sess->ftp_arg_str, APR_FINFO_TYPE|APR_FINFO_SIZE, sess->loop_pool);
+	if((APR_SUCCESS != rc) || (APR_REG != finfo.filetype))
+	{
+		lfd_cmdio_write(sess, FTP_FILEFAIL, (APR_SUCCESS == rc)?"File type is not of regular type":"Failed to stat file.");
+		lkl_file_close(file);
+		return rc;
+	}
+	if (0 != offset)
+	{
+		rc = lkl_file_seek(file, APR_SET, &offset);
+		if(APR_SUCCESS != rc)
+		{
+			lfd_cmdio_write(sess, FTP_FILEFAIL, "Failed to seek into file.");
+			lkl_file_close(file);
+			return rc;
+		}
+	}
 
-/*
 
-	if (!vsf_access_check_file(&p_sess->ftp_arg_str))
+	msg = apr_psprintf(sess->loop_pool, "Opening %s %s %s %s %u %s",
+			sess->is_ascii?"ASCII":"BINARY", " mode data connection for ",
+      			sess->ftp_arg_str, " ( ", (unsigned int)finfo.size, " bytes).");
+
+
+
+	remote_fd = get_remote_transfer_fd(sess, msg);
+	if(NULL == remote_fd)
 	{
-		vsf_cmdio_write(p_sess, FTP_NOPERM, "Permission denied.");
-		return;
+		port_cleanup(sess);
+		pasv_cleanup(sess);
+		lkl_file_close(file);
+		return APR_EINVAL;
 	}
-	opened_file = str_open(&p_sess->ftp_arg_str, kVSFSysStrOpenReadOnly);
-	if (vsf_sysutil_retval_is_error(opened_file))
-	{
-		vsf_cmdio_write(p_sess, FTP_FILEFAIL, "Failed to open file.");
-		return;
-	}
-	// Lock file if required
-	if (tunable_lock_upload_files)
-	{
-		vsf_sysutil_lock_file_read(opened_file);
-	}
-	vsf_sysutil_fstat(opened_file, &s_p_statbuf);
-	// No games please
-	if (!vsf_sysutil_statbuf_is_regfile(s_p_statbuf))
-	{
-		// Note - pretend open failed
-		vsf_cmdio_write(p_sess, FTP_FILEFAIL, "Failed to open file.");
-		goto file_close_out;
-	}
-	// Set the download offset (from REST) if any
-	if (offset != 0)
-	{
-		vsf_sysutil_lseek_to(opened_file, offset);
-	}
-	str_alloc_text(&s_mark_str, "Opening ");
-	if (tunable_ascii_download_enable && p_sess->is_ascii)
-	{
-		str_append_text(&s_mark_str, "ASCII");
-		is_ascii = 1;
-	}
-	else
-	{
-		str_append_text(&s_mark_str, "BINARY");
-	}
-	str_append_text(&s_mark_str, " mode data connection for ");
-	str_append_str(&s_mark_str, &p_sess->ftp_arg_str);
-	str_append_text(&s_mark_str, " (");
-	str_append_filesize_t(&s_mark_str,
-			       vsf_sysutil_statbuf_get_size(s_p_statbuf));
-	str_append_text(&s_mark_str, " bytes).");
-	remote_fd = get_remote_transfer_fd(p_sess, str_getbuf(&s_mark_str));
-	if (vsf_sysutil_retval_is_error(remote_fd))
-	{
-		goto port_pasv_cleanup_out;
-	}
-	trans_ret = vsf_ftpdataio_transfer_file(p_sess, remote_fd,
-			opened_file, 0, is_ascii);
-	vsf_ftpdataio_dispose_transfer_fd(p_sess);
-	p_sess->transfer_size = trans_ret.transferred;
-	// Log _after_ the blocking dispose call, so we get transfer times right
-	if (trans_ret.retval == 0)
-	{
-		vsf_log_do_log(p_sess, 1);
-	}
-  // Emit status message _after_ blocking dispose call to avoid buggy FTP
-	// clients truncating the transfer.
+
+	trans_ret = do_file_send_rwloop(sess, remote_fd, file, sess->is_ascii);
+	lfd_dispose_transfer_fd(sess);
 
 	if (trans_ret.retval == -1)
 	{
-		vsf_cmdio_write(p_sess, FTP_BADSENDFILE, "Failure reading local file.");
+		lfd_cmdio_write(sess, FTP_BADSENDFILE, "Failure reading local file.");
 	}
 	else if (trans_ret.retval == -2)
 	{
-		vsf_cmdio_write(p_sess, FTP_BADSENDNET, "Failure writing network stream.");
+		lfd_cmdio_write(sess, FTP_BADSENDNET, "Failure writing network stream.");
 	}
 	else
 	{
-		vsf_cmdio_write(p_sess, FTP_TRANSFEROK, "File send OK.");
+		lfd_cmdio_write(sess, FTP_TRANSFEROK, "File send OK.");
 	}
-	check_abor(p_sess);
-port_pasv_cleanup_out:
-		port_cleanup(p_sess);
-  pasv_cleanup(p_sess);
-file_close_out:
-		vsf_sysutil_close(opened_file);
-	*/
+	check_abor(sess);
+	port_cleanup(sess);
+	pasv_cleanup(sess);
+
+	lkl_file_close(file);
+
 	return APR_SUCCESS;
 }
 

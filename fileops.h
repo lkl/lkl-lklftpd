@@ -10,7 +10,7 @@
 #define lkl_file_read		apr_file_read
 #define lkl_file_writev		apr_file_writev
 #define lkl_file_writev_full	apr_file_writev_full
-#define lkl_file_create		apr_file_create
+#define lkl_file_open		apr_file_open
 #define lkl_file_close		apr_file_close
 #define lkl_file_write		apr_file_write
 #define lkl_file_remove		apr_file_remove
@@ -59,6 +59,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
+struct lkl_file_t;
+typedef struct lkl_file_t lkl_file_t;
 apr_status_t lkl_file_open(lkl_file_t **newf, const char *fname,
                                         apr_int32_t flag, apr_fileperms_t perm,
                                         apr_pool_t *pool);
@@ -492,7 +494,6 @@ apr_status_t lkl_temp_dir_get(const char **temp_dir,
 }
 #endif
 
-#endif  /* ! APR_FILE_IO_H */
 
 
 

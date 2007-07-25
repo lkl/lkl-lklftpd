@@ -15,6 +15,7 @@ struct lfd_data_sess
 	int		  in_progress;		// status of the current transfer (in progress or not )
 	int 		  is_ascii;
 	apr_off_t	  restart_pos;		//if non zero represents the offset from where to begin sending file data.
+	int 		  abor_received;
 
 };
 
