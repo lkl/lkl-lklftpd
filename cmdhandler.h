@@ -22,10 +22,11 @@ apr_status_t handle_port(struct lfd_sess* p_sess);
 
 // file transfer/status commands
 apr_status_t handle_retr(struct lfd_sess *sess);
+apr_status_t handle_dele(struct lfd_sess *sess);
 
 // directory commands
-apr_status_t handle_dir_remove(struct lfd_sess *psess);
-apr_status_t handle_dir_create(struct lfd_sess *psess);
+apr_status_t handle_dir_remove(struct lfd_sess *p_sess);
+apr_status_t handle_dir_create(struct lfd_sess *p_sess);
 apr_status_t handle_pwd(struct lfd_sess *p_sess);
 apr_status_t handle_cwd(struct lfd_sess *p_sess);
 apr_status_t handle_cdup(struct lfd_sess *p_sess);

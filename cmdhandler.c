@@ -262,19 +262,22 @@ apr_status_t handle_rnfr(struct lfd_sess *p_sess, char ** temp_path)
 		return ret;
 	}
 	
-	//check if the argument is a valid path 
 	if('/' == *(p_sess->ftp_arg_str))
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
 	else
-		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path,"/", p_sess->ftp_arg_str, NULL);
+		if(0 ==apr_strnatcmp(p_sess->rel_path, "/"))
+			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str, NULL);
+	else
+		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1,"/", p_sess->ftp_arg_str, NULL);
+	
 	if(NULL == path)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
-	
+
 	ret = apr_stat(&finfo, path, APR_FINFO_TYPE, p_sess->loop_pool);
-	if((APR_SUCCESS != ret) || (APR_REG != finfo.filetype) || (APR_DIR != finfo.filetype))
+	if((APR_SUCCESS != ret) || ((APR_REG != finfo.filetype) && (APR_DIR != finfo.filetype)))
 	{
 		ret = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "%s is not a directory or a file.", p_sess->ftp_arg_str);
 		return ret;
@@ -737,7 +740,8 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 	}
 	resolve_tilde(&sess->ftp_arg_str, sess);
 
-
+	// build the complete file path here -TODO
+	
 	rc = lkl_file_open(&file, sess->ftp_arg_str, APR_FOPEN_READ|APR_FOPEN_BINARY|APR_FOPEN_LARGEFILE|APR_FOPEN_SENDFILE_ENABLED, 0, sess->loop_pool);
 	if(APR_SUCCESS != rc)
 	{
@@ -802,4 +806,39 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 	return APR_SUCCESS;
 }
 
+apr_status_t handle_dele(struct lfd_sess * p_sess)
+{
+	apr_status_t ret;
+	char * path;
+	
+	if(NULL == p_sess->ftp_arg_str)
+	{
+		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Bad command argument.");
+		return ret;
+	}
+	
+	if('/' == *(p_sess->ftp_arg_str))
+		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
+	else
+		if(0 ==apr_strnatcmp(p_sess->rel_path, "/"))
+			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str, NULL);
+	else
+		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1,"/", p_sess->ftp_arg_str, NULL);
+	
+	if(NULL == path)
+	{
+		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
+		return APR_EINVAL;
+	}
+	
+	ret = lkl_file_remove(path, p_sess->loop_pool);
+	if(APR_SUCCESS !=ret)
+	{
+		lfd_log(LFD_ERROR, "lkl_file_remove failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
+		ret = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "Requested action not taken. File unavailable.");
+	}
+	else
+		ret = lfd_cmdio_write(p_sess,  FTP_DELEOK,"File deleted.");
+	return ret;
+}
 

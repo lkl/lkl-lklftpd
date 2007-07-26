@@ -106,7 +106,12 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 			continue;
 		}
 		// here we treat all the other cases
-		rnfrto = 0;
+		if(rnfrto){
+			rnfrto = 0;
+			rc = handle_bad_rnto(sess);
+			continue;
+		}
+		
 		if(lfd_cmdio_cmd_equals(sess, "PASIVE"))
 		{
 			rc = handle_passive(sess);
@@ -169,7 +174,11 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		{
 			rc = handle_retr(sess);
 		}
-
+		else if(lfd_cmdio_cmd_equals(sess, "DELE"))
+		{
+			rc = handle_dele(sess);
+		}
+		
 		else //default
 		{
 			printf("The cmd [%s] has no installed handler! \n", sess->ftp_cmd_str);
