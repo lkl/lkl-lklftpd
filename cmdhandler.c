@@ -421,21 +421,24 @@ static void pasv_cleanup(struct lfd_sess* p_sess)
 apr_status_t handle_port(struct lfd_sess* p_sess)
 {
 	apr_status_t rc;
-	unsigned short the_port;
+	apr_port_t the_port;
 	unsigned char vals[6];
 	const unsigned char* p_raw;
 	struct apr_sockaddr_t * saddr;
 	char * ip_str;
 	pasv_cleanup(p_sess);
 	port_cleanup(p_sess);
+
+	// the received command argumet is a string of the form:
+	// ip1,ip2,ip3,ip4,po1,po2 - representing the remote host's IP and port number.
 	p_raw = lkl_str_parse_uchar_string_sep(p_sess->ftp_arg_str, ',', vals, sizeof(vals));
 	if (p_raw == 0)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADCMD, "Illegal PORT command.");
 		return APR_EINVAL;
 	}
-	the_port = vals[4] << 8;
-	the_port |= vals[5];
+	the_port = (vals[4] << 8) | vals[5];
+
 	ip_str = apr_psprintf(p_sess->loop_pool, "%d.%d.%d.%d", vals[0], vals[1], vals[2], vals[3]);
 	rc = apr_sockaddr_info_get(&saddr, ip_str, APR_UNSPEC, the_port, 0, p_sess->sess_pool);
 
@@ -531,6 +534,10 @@ static void init_data_sock_params(struct lfd_sess* p_sess, apr_socket_t * sock_f
 	apr_socket_opt_set(sock_fd, APR_SO_LINGER, 1);
 }
 
+/**
+ * @brief Get a connected socket to the client's listening data port.
+ * Also binds the local end of the socket to a configurable (default 20) data port.
+ */
 static apr_status_t get_bound_and_connected_ftp_port_sock(struct lfd_sess* p_sess, apr_socket_t ** psock)
 {
 	apr_socket_t	* sock;
@@ -569,17 +576,19 @@ static apr_status_t ftpdataio_get_port_fd(struct lfd_sess* p_sess, apr_socket_t 
 	if (APR_SUCCESS != rc)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADSENDCONN, "Failed to establish connection.");
-		printf("%s\n", lfd_sess_strerror(p_sess, rc));
+		lfd_log(LFD_ERROR, "get_bound_and_connected_ftp_port_sock failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(p_sess, rc));
 		return rc;
 	}
 
 	init_data_sock_params(p_sess, remote_fd);
 	*psock = remote_fd;
-
 	return APR_SUCCESS;
 }
 
-
+/**
+ * @brief gets an apr_socket_t which is to be used for data transfer.
+ * On success sends the p_status_msg message to the client, confirming a successful connection.
+ */
 static apr_socket_t* get_remote_transfer_fd(struct lfd_sess* p_sess, const char* p_status_msg)
 {
 	apr_socket_t	* remote_fd;
@@ -605,6 +614,12 @@ static apr_socket_t* get_remote_transfer_fd(struct lfd_sess* p_sess, const char*
 	return remote_fd;
 }
 
+/**
+ * @brief Writes all the content on the buffer to the socket.
+ * @param fd IN the socket on which to send the data
+ * @param p_buf IN the location of the data
+ * @param psize IN/OUT input: the buffer length, output: what amount get written on the socket.
+*/
 static apr_status_t lfd_socket_write_full(apr_socket_t * fd, const void* p_buf, apr_size_t * psize)
 {
 	apr_status_t	rc;
@@ -676,7 +691,7 @@ static struct lfd_transfer_ret do_file_send_rwloop(struct lfd_sess* p_sess, apr_
 		if((APR_SUCCESS != rc) && (APR_EOF != rc))
 		{
 			ret_struct.retval = -1;
-			printf("%s\n", lfd_sess_strerror(p_sess, rc));
+			lfd_log(LFD_ERROR, "lkl_file_read failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(p_sess, rc));
 			return ret_struct;
 		}
 		else if (0 == bytes_read)
@@ -698,6 +713,7 @@ static struct lfd_transfer_ret do_file_send_rwloop(struct lfd_sess* p_sess, apr_
 		if((APR_SUCCESS != rc) || (bytes_written != bytes_read))
 		{
 			ret_struct.retval = -2;
+			lfd_log(LFD_ERROR, "lfd_socket_write_full failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(p_sess, rc));
 			return ret_struct;
 		}
 		ret_struct.transferred += bytes_written;
