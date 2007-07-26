@@ -12,18 +12,16 @@
 
 int handle_user_cmd(struct lfd_sess* p_sess)
 {
+	//TODO: this is a hardcoded value! we need to check the user of the system!
 	return (0 == apr_strnatcasecmp(p_sess->user, p_sess->ftp_arg_str));
 }
 
 int handle_pass_cmd(struct lfd_sess* p_sess)
 {
+	//TODO: this is a hardcoded value! we need to check the passwd of the system!
 	return (0 == apr_strnatcasecmp(p_sess->passwd, p_sess->ftp_arg_str) );
 }
 
-int lfd_cmdio_cmd_equals(struct lfd_sess*sess, const char * cmd)
-{
-	return (0 == apr_strnatcasecmp(sess->ftp_cmd_str, cmd));
-}
 
 apr_status_t handle_passive(struct lfd_sess * sess)
 {

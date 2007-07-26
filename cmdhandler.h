@@ -3,7 +3,6 @@
 
 #include "cmdio.h"
 
-int lfd_cmdio_cmd_equals(struct lfd_sess*sess, const char * cmd);
 
 // login commands
 int handle_user_cmd(struct lfd_sess* p_sess);

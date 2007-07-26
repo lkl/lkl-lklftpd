@@ -23,6 +23,12 @@ static apr_status_t emit_greeting(struct lfd_sess * p_sess)
 	return rc;
 }
 
+static int lfd_cmdio_cmd_equals(struct lfd_sess*sess, const char * cmd)
+{
+	return (0 == apr_strnatcasecmp(sess->ftp_cmd_str, cmd));
+}
+
+
 static apr_status_t get_username_password(struct lfd_sess* p_sess)
 {
 	apr_status_t rc;
