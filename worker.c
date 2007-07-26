@@ -95,6 +95,7 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 	apr_status_t rc = APR_SUCCESS;
 	while(APR_SUCCESS == rc)
 	{
+		apr_pool_clear(sess->loop_pool);
 		rc = lfd_cmdio_get_cmd_and_arg(sess, &sess->ftp_cmd_str, &sess->ftp_arg_str, 1);
 		if(APR_SUCCESS != rc)
 			return rc;
