@@ -22,7 +22,6 @@ int handle_pass_cmd(struct lfd_sess* p_sess)
 	return (0 == apr_strnatcasecmp(p_sess->passwd, p_sess->ftp_arg_str) );
 }
 
-
 apr_status_t handle_passive(struct lfd_sess * sess)
 {
 	//TODO:implement
@@ -66,7 +65,9 @@ apr_status_t handle_abort(struct lfd_sess* p_sess)
 		lfd_cmdio_write(p_sess, FTP_ABOR_NOCONN, "Nothing to abort.\r\n");
 		return APR_SUCCESS;
 	}
-	apr_thread_exit(p_sess->data_conn->data_conn_th, APR_SUCCESS);
+	if(NULL != p_sess->data_conn->data_conn_th)
+		apr_thread_exit(p_sess->data_conn->data_conn_th, APR_SUCCESS);
+
 	lfd_data_sess_destroy(p_sess->data_conn);
 	lfd_cmdio_write(p_sess, FTP_ABOROK, "File transfer aborted.\r\n");
 	return APR_SUCCESS;
@@ -85,6 +86,8 @@ apr_status_t handle_dir_remove(struct lfd_sess *p_sess)
 	}
 	// make absolute path of the directory we want to remove ( user's home dir + the current path in this dir + arg )
 	// if the path is invalid then lkl_dir_remove should return an appropiate error
+	//###: this code is platform dependent (assumes "/" as root, won't work on windows)
+	//###: this code get's duplicated in handle_dir_create. It should be made into a function
 	if('/' == *(p_sess->ftp_arg_str))
 	{
 		// absolute path
@@ -97,6 +100,8 @@ apr_status_t handle_dir_remove(struct lfd_sess *p_sess)
 		else
 			path = apr_pstrcat(p_sess->loop_pool,p_sess->home_str, p_sess->ftp_arg_str, NULL);
 	}
+	//###: end of duplicated code.
+
 	if (NULL == path)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
@@ -194,6 +199,7 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 	}
 
 	// is psess->ftp_arg_str a relative or absolute path ?
+	//###:duplicated code
 	if('/' == *(p_sess->ftp_arg_str))
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
 	else
@@ -201,7 +207,7 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str, NULL);
 	else
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1, p_sess->ftp_arg_str, NULL);
-
+	//###:end of duplicated code
 	if(NULL == path)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
@@ -214,13 +220,14 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 	if(APR_SUCCESS == ret)
 	{
 		// add to the current rel_path ftp_arg_str
+		//###:duplicated code
 		if('/' == *(p_sess->ftp_arg_str))
 			p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"%s",p_sess->ftp_arg_str);
 		else if( 0 == apr_strnatcmp(p_sess->rel_path,"/"))
 			p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"/%s", p_sess->ftp_arg_str);
 		else
 			p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"%s/%s", p_sess->rel_path, p_sess->ftp_arg_str);
-
+		//###:end of duplicated code
 		ret = lfd_cmdio_write(p_sess, FTP_CWDOK, "Directory changed to %s.", p_sess->rel_path);
 	}
 	else
@@ -276,10 +283,12 @@ apr_status_t handle_rnfr(struct lfd_sess *p_sess, char ** temp_path)
 	}
 
 	//check if the argument is a valid path
+	//###:duplicated code
 	if('/' == *(p_sess->ftp_arg_str))
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
 	else
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path, p_sess->ftp_arg_str, NULL);
+	//###:end of duplicated code (this is just a part of the code that gets rewritten arround, is this by design or a mistake from copy-pasting?)
 	if(NULL == path)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
@@ -314,10 +323,12 @@ apr_status_t handle_rnto(struct lfd_sess *p_sess, char * old_path)
 	}
 
 	// obtain the new path and call lkl_file_rename
+	//###:duplicated code
 	if('/' == *(p_sess->ftp_arg_str))
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
 	else
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path, p_sess->ftp_arg_str, NULL);
+	//###:end of duplicated code (again, some lines of duplicated code are missing here. is it by design?)
 	if(NULL == path)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
