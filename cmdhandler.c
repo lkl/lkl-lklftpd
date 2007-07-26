@@ -4,6 +4,8 @@
 #include "ftpcodes.h"
 #include "utils.h"
 #include "fileops.h"
+#include "config.h"
+
 
 //TODO: rename and move to apppropriate place
 #define VSFTP_DATA_BUFSIZE      65536
@@ -528,10 +530,9 @@ static apr_status_t get_bound_and_connected_ftp_port_sock(struct lfd_sess* p_ses
 
 	*psock = NULL;
 
-	rc = apr_sockaddr_info_get(&saddr, NULL, APR_UNSPEC, 20, 0, p_sess->loop_pool);
+	rc = apr_sockaddr_info_get(&saddr, NULL, APR_UNSPEC, lfd_config_data_port, 0, p_sess->loop_pool);
 	if(APR_SUCCESS != rc)
 		return rc;
-
 	rc = apr_socket_create(&sock, APR_INET, SOCK_STREAM, APR_PROTO_TCP, p_sess->loop_pool);
 	if(APR_SUCCESS != rc)
 		return rc;
@@ -541,7 +542,6 @@ static apr_status_t get_bound_and_connected_ftp_port_sock(struct lfd_sess* p_ses
 	rc = apr_socket_bind(sock, saddr);
 	if(APR_SUCCESS != rc)
 		return rc;
-
 	rc = apr_socket_connect (sock, p_sess->p_port_sockaddr);
 	if(APR_SUCCESS != rc)
 		return rc;

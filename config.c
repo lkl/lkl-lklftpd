@@ -2,6 +2,7 @@
 
 int lfd_config_max_login_attempts = 3;
 int lfd_config_listen_port = 21;
+int lfd_config_data_port = 20;
 int lfd_config_connect_port = 20;
 const char * lfd_config_listen_host = "localhost";
 const char * lfd_config_banner_string = "Welcome to LklFtp Server.";
