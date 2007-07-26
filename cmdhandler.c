@@ -76,7 +76,7 @@ apr_status_t handle_dir_remove(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
 	char * path;
-	
+
 	ret = APR_SUCCESS;
 	if (NULL == p_sess->ftp_arg_str)
 	{
@@ -98,13 +98,13 @@ apr_status_t handle_dir_remove(struct lfd_sess *p_sess)
 			path = apr_pstrcat(p_sess->loop_pool,p_sess->home_str, p_sess->ftp_arg_str, NULL);
 	}
 	if (NULL == path)
-	{	
+	{
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
-	
+
 	ret = lkl_dir_remove(path,p_sess->loop_pool);
-	
+
 	if(APR_SUCCESS != ret)
 	{
 		lfd_log(LFD_ERROR, "lkl_dir_remove failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
@@ -120,7 +120,7 @@ apr_status_t handle_dir_create(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
 	char * path;
-	
+
 	ret = APR_SUCCESS;
 	if(NULL == p_sess->ftp_arg_str)
 	{
@@ -160,7 +160,7 @@ apr_status_t handle_dir_create(struct lfd_sess *p_sess)
 apr_status_t handle_pwd(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
-	
+
 	ret = lfd_cmdio_write(p_sess, FTP_PWDOK,p_sess->rel_path);
 	return ret;
 }
@@ -170,7 +170,7 @@ static apr_status_t dir_exists(const char * path, apr_pool_t * pool)
 	apr_finfo_t finfo;
 	apr_status_t ret;
 	// TODO - check if the given path represents a real directory
-	
+
 	ret = apr_stat(&finfo, path, APR_FINFO_TYPE, pool);
 	if( ret == APR_SUCCESS || ret == APR_INCOMPLETE )
 	{
@@ -185,14 +185,14 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
 	char * path;
-	
+
 	ret = APR_SUCCESS;
 	if(NULL == p_sess->ftp_arg_str)
 	{
 		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Command must have an argument.");
 		return ret;
 	}
-	
+
 	// is psess->ftp_arg_str a relative or absolute path ?
 	if('/' == *(p_sess->ftp_arg_str))
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
@@ -201,13 +201,13 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str, NULL);
 	else
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1, p_sess->ftp_arg_str, NULL);
-	
+
 	if(NULL == path)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
-	
+
 	// verify that the path represents a valid directory
 	ret = dir_exists(path, p_sess->loop_pool);
 
@@ -218,12 +218,12 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 			p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"%s",p_sess->ftp_arg_str);
 		else if( 0 == apr_strnatcmp(p_sess->rel_path,"/"))
 			p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"/%s", p_sess->ftp_arg_str);
-		else 
+		else
 			p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"%s/%s", p_sess->rel_path, p_sess->ftp_arg_str);
-		
+
 		ret = lfd_cmdio_write(p_sess, FTP_CWDOK, "Directory changed to %s.", p_sess->rel_path);
 	}
-	else 
+	else
 	{
 		lfd_log(LFD_ERROR, "dir_exists failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
 		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot change directory.");
@@ -235,7 +235,7 @@ apr_status_t handle_cdup(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
 	char * pos, * last;
-	
+
 	ret = APR_SUCCESS;
 	// shouldn't have an argument
 	// changes the current directory with it's parent
@@ -250,14 +250,14 @@ apr_status_t handle_cdup(struct lfd_sess *p_sess)
 	{
 		if(*pos == '/')
 			last = pos;
-		pos++; 
+		pos++;
 	}
-	// end the string here, before pos 
+	// end the string here, before pos
 	if(last == p_sess->rel_path)
 		p_sess->rel_path = "/";
 	else
 		*last = '\0';
-	
+
 	ret = lfd_cmdio_write(p_sess, FTP_ALLOOK, "Changed to directory %s.",p_sess->rel_path);
 	return ret;
 }
@@ -266,7 +266,7 @@ apr_status_t handle_rnfr(struct lfd_sess *p_sess, char ** temp_path)
 {
 	apr_status_t ret;
 	char * path;
-	
+
 	*temp_path = NULL;
 	ret = APR_SUCCESS;
 	if(NULL == p_sess->ftp_arg_str)
@@ -274,8 +274,8 @@ apr_status_t handle_rnfr(struct lfd_sess *p_sess, char ** temp_path)
 		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Bad command argument.");
 		return ret;
 	}
-	
-	//check if the argument is a valid path 
+
+	//check if the argument is a valid path
 	if('/' == *(p_sess->ftp_arg_str))
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
 	else
@@ -285,7 +285,7 @@ apr_status_t handle_rnfr(struct lfd_sess *p_sess, char ** temp_path)
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
-	
+
 	ret = dir_exists(path, p_sess->loop_pool);
 
 	if(APR_SUCCESS == ret)
@@ -300,7 +300,7 @@ apr_status_t handle_rnfr(struct lfd_sess *p_sess, char ** temp_path)
 	}
 	return ret;
 }
-	
+
 apr_status_t handle_rnto(struct lfd_sess *p_sess, char * old_path)
 {
 	apr_status_t ret;
@@ -312,7 +312,7 @@ apr_status_t handle_rnto(struct lfd_sess *p_sess, char * old_path)
 		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Bad command argument.");
 		return ret;
 	}
-	
+
 	// obtain the new path and call lkl_file_rename
 	if('/' == *(p_sess->ftp_arg_str))
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
@@ -323,13 +323,13 @@ apr_status_t handle_rnto(struct lfd_sess *p_sess, char * old_path)
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
-	
+
 	ret = lkl_file_rename(old_path, path, p_sess->loop_pool);
-	
+
 	if(APR_SUCCESS != ret)
 	{
 		lfd_log(LFD_ERROR, "lkl_file_rename failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
-		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot rename directory %s.", p_sess->ftp_arg_str);	
+		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot rename directory %s.", p_sess->ftp_arg_str);
 	}
 	else
 		ret = lfd_cmdio_write(p_sess, FTP_RENAMEOK, "Directory was succesfully renamed.");
@@ -406,28 +406,15 @@ static void pasv_cleanup(struct lfd_sess* p_sess)
 
 
 
-static void sockaddr_vars_set(apr_sockaddr_t *addr, apr_port_t port, const unsigned char * ipv4_bytes_in_network_order)
-{
-	addr->family = APR_INET;
-	addr->sa.sin.sin_family = APR_INET;
-	addr->sa.sin.sin_port = htons(port);
-	addr->port = port;
-
-	addr->salen = sizeof(struct sockaddr_in);
-	addr->addr_str_len = 16;
-	addr->ipaddr_ptr = &(addr->sa.sin.sin_addr);
-	addr->ipaddr_len = sizeof(struct in_addr);
-	memcpy(addr->ipaddr_ptr, ipv4_bytes_in_network_order, 4); //only copy 4 bytes=the length of the IPv4 address
-}
-
-
 // specify an alternate data port by use of the PORT command
 apr_status_t handle_port(struct lfd_sess* p_sess)
 {
+	apr_status_t rc;
 	unsigned short the_port;
 	unsigned char vals[6];
 	const unsigned char* p_raw;
 	struct apr_sockaddr_t * saddr;
+	char * ip_str;
 	pasv_cleanup(p_sess);
 	port_cleanup(p_sess);
 	p_raw = lkl_str_parse_uchar_string_sep(p_sess->ftp_arg_str, ',', vals, sizeof(vals));
@@ -438,14 +425,17 @@ apr_status_t handle_port(struct lfd_sess* p_sess)
 	}
 	the_port = vals[4] << 8;
 	the_port |= vals[5];
-	saddr = apr_pcalloc(p_sess->sess_pool, sizeof(struct apr_sockaddr_t));
-
-	//The PORT command supports IPv4 only
-	saddr->pool = p_sess->sess_pool;
-	sockaddr_vars_set(saddr, the_port, vals);
+	ip_str = apr_psprintf(p_sess->loop_pool, "%d.%d.%d.%d", vals[0], vals[1], vals[2], vals[3]);
+	rc = apr_sockaddr_info_get(&saddr, ip_str, APR_UNSPEC, the_port, 0, p_sess->sess_pool);
 
 	p_sess->p_port_sockaddr = saddr;
+	if(APR_SUCCESS != rc)
+	{
+		lfd_cmdio_write(p_sess, FTP_BADCMD, "Illegal PORT command.");
+		return rc;
+	}
 	lfd_cmdio_write(p_sess, FTP_PORTOK, "PORT command successful. Consider using PASV.");
+
 	return APR_SUCCESS;
 }
 
@@ -510,7 +500,7 @@ static void resolve_tilde(char ** p_str, struct lfd_sess* p_sess)
 		}
 		else if('/' == str[1])
 		{
-			*p_str = apr_pstrcat(p_sess->sess_pool, p_sess->home_str, str+1, NULL);
+			*p_str = apr_pstrcat(p_sess->sess_pool, p_sess->home_str, str+2, NULL);
 		}
 	}
 }
@@ -542,7 +532,7 @@ static apr_status_t get_bound_and_connected_ftp_port_sock(struct lfd_sess* p_ses
 	if(APR_SUCCESS != rc)
 		return rc;
 
-	rc = apr_socket_create(&sock, APR_UNSPEC, SOCK_STREAM, APR_PROTO_TCP, p_sess->loop_pool);
+	rc = apr_socket_create(&sock, APR_INET, SOCK_STREAM, APR_PROTO_TCP, p_sess->loop_pool);
 	if(APR_SUCCESS != rc)
 		return rc;
 	rc = apr_socket_opt_set(sock, APR_SO_REUSEADDR, 1);
@@ -570,6 +560,7 @@ static apr_status_t ftpdataio_get_port_fd(struct lfd_sess* p_sess, apr_socket_t 
 	if (APR_SUCCESS != rc)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADSENDCONN, "Failed to establish connection.");
+		printf("%s\n", lfd_sess_strerror(p_sess, rc));
 		return rc;
 	}
 
@@ -619,7 +610,7 @@ static apr_status_t lfd_socket_write_full(apr_socket_t * fd, const void* p_buf, 
 	while (1)
 	{
 		num_written = size;
-		rc = apr_socket_send(fd, (const char*)p_buf + num_written, &num_written);
+		rc = apr_socket_send(fd, (const char*)p_buf + *psize, &num_written);
 		if (APR_SUCCESS != rc)
 		{
 			return rc;
@@ -653,7 +644,7 @@ static struct lfd_transfer_ret do_file_send_rwloop(struct lfd_sess* p_sess, apr_
 	struct lfd_transfer_ret ret_struct = { 0, 0 };
 	apr_size_t chunk_size = 4096;
 	char* p_writefrom_buf;
-	p_readbuf = apr_palloc(p_sess->loop_pool, VSFTP_DATA_BUFSIZE);
+	p_readbuf = apr_palloc(p_sess->loop_pool, is_ascii?VSFTP_DATA_BUFSIZE*2:VSFTP_DATA_BUFSIZE);
 	p_asciibuf= apr_palloc(p_sess->loop_pool, VSFTP_DATA_BUFSIZE*2);
 
 	if (is_ascii)
@@ -672,9 +663,11 @@ static struct lfd_transfer_ret do_file_send_rwloop(struct lfd_sess* p_sess, apr_
 		apr_size_t	bytes_written;
 		apr_status_t	rc;
 		rc = lkl_file_read(file_fd, p_readbuf, &bytes_read);
+		//printf("%s\n", lfd_sess_strerror(p_sess, rc));
 		if((APR_SUCCESS != rc) && (APR_EOF != rc))
 		{
 			ret_struct.retval = -1;
+			printf("%s\n", lfd_sess_strerror(p_sess, rc));
 			return ret_struct;
 		}
 		else if (0 == bytes_read)
@@ -721,10 +714,7 @@ static void check_abor(struct lfd_sess* p_sess)
 }
 
 apr_status_t handle_retr(struct lfd_sess *sess)
-{/*
-	int remote_fd;
-	int opened_file;
-	int is_ascii = 0;*/
+{
 	char			* msg;
 	apr_off_t		  offset = sess->restart_pos;
 	apr_status_t		  rc;
@@ -747,7 +737,7 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 	resolve_tilde(&sess->ftp_arg_str, sess);
 
 
-	rc = lkl_file_open(&file, sess->ftp_arg_str, APR_FOPEN_READ|APR_FOPEN_BINARY|APR_FOPEN_LARGEFILE|APR_FOPEN_SENDFILE_ENABLED, 0, sess->loop_pool);
+	rc = lkl_file_open(&file, sess->ftp_arg_str, APR_FOPEN_READ|APR_FOPEN_BINARY|APR_FOPEN_LARGEFILE, 0, sess->loop_pool);
 	if(APR_SUCCESS != rc)
 	{
 		lfd_cmdio_write(sess, FTP_FILEFAIL, "Failed to open file.");
@@ -771,11 +761,9 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 		}
 	}
 
-
 	msg = apr_psprintf(sess->loop_pool, "Opening %s %s %s %s %u %s",
 			sess->is_ascii?"ASCII":"BINARY", " mode data connection for ",
-      			sess->ftp_arg_str, " ( ", (unsigned int)finfo.size, " bytes).");
-
+			sess->ftp_arg_str, " ( ", (unsigned int)finfo.size, " bytes).");
 
 
 	remote_fd = get_remote_transfer_fd(sess, msg);
