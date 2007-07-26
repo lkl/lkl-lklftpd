@@ -31,6 +31,6 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess);
 apr_status_t handle_cdup(struct lfd_sess *p_sess);
 apr_status_t handle_rnfr(struct lfd_sess *p_sess, char** temp_path);
 apr_status_t handle_rnto(struct lfd_sess *p_sess, char * old_path);
-
+apr_status_t handle_bad_rnto(struct lfd_sess *p_sess);
 
 #endif//LKLFTPD_CMDHANDLER_H__
