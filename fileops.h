@@ -36,16 +36,21 @@
 #define lkl_file_perms_set	apr_file_perms_set
 #define lkl_file_attrs_set	apr_file_attrs_set
 #define lkl_file_mtime_set	apr_file_mtime_set
-#define lkl_dir_make		apr_dir_make
-#define lkl_dir_make_recursive	apr_dir_make_recursive
-#define lkl_dir_remove		apr_dir_remove
 #define lkl_file_info_get	apr_file_info_get
 #define lkl_file_trunc		apr_file_trunc
 #define lkl_file_flags_get	apr_file_flags_get
 #define lkl_file_mktemp		apr_file_mktemp
-#define lkl_temp_dir_get	apr_temp_dir_get
 
 #define lkl_stat		apr_stat
+
+#define lkl_dir_make		apr_dir_make
+#define lkl_dir_make_recursive	apr_dir_make_recursive
+#define lkl_dir_remove		apr_dir_remove
+#define lkl_dir_open		apr_dir_open
+#define lkl_dir_close		apr_dir_close
+#define lkl_dir_read		apr_dir_read
+#define lkl_temp_dir_get	apr_temp_dir_get
+
 #else//LKL_FILE_APIS
 
 
@@ -489,8 +494,35 @@ apr_status_t lkl_file_mktemp(lkl_file_t **fp, char *templ,
 apr_status_t lkl_temp_dir_get(const char **temp_dir,
                                            apr_pool_t *p);
 
+
 apr_status_t lkl_stat(apr_finfo_t *finfo, const char* fname, apr_int32_t wanted, apr_pool_t *pool);
 
+/**
+* Open the specified directory.
+* @param new_dir The opened directory descriptor.
+* @param dirname The full path to the directory (use / on all systems)
+* @param cont The pool to use.
+*
+*/
+apr_status_t lkl_dir_open (apr_dir_t ** new,const char * dirname,a pr_pool_t *  pool);
+
+/**
+* Read the next entry from the specified directory.
+* @param finfo 	the file info structure and filled in by apr_dir_read
+* @param wanted The desired apr_finfo_t fields, as a bit flag of APR_FINFO_ values
+* @param thedir the directory descriptor returned from apr_dir_open
+* @emark
+* No ordering is guaranteed for the entries read.
+*
+*/
+apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, apr_dir_t * thedir);
+
+/**
+* Close the specified directory.
+* @param thedir the directory descriptor to close.
+*
+*/
+apr_status_t lkl_dir_close(apr_dir_t * thedir);
 
 #ifdef __cplusplus
 }

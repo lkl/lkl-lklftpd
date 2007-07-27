@@ -86,20 +86,39 @@ static apr_status_t get_username_password(struct lfd_sess* p_sess)
 	return APR_SUCCESS;
 }
 
-
-
-
-
 static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 {
 	apr_status_t rc = APR_SUCCESS;
+	int rnfrto; // "rename from" and "rename to" should go togheter 
+	char * temp_name;
+	
+	temp_name = NULL;
+	rnfrto = 0;
 	while(APR_SUCCESS == rc)
 	{
 		apr_pool_clear(sess->loop_pool);
 		rc = lfd_cmdio_get_cmd_and_arg(sess, &sess->ftp_cmd_str, &sess->ftp_arg_str, 1);
 		if(APR_SUCCESS != rc)
 			return rc;
-
+		// special case
+		if(lfd_cmdio_cmd_equals(sess, "RNTO"))
+		{
+			if(rnfrto)
+			{
+				rnfrto = 0;
+				rc = handle_rnto(sess, temp_name);
+			}
+			else
+				rc = handle_bad_rnto(sess);
+			continue;
+		}
+		// here we treat all the other cases
+		if(rnfrto){
+			rnfrto = 0;
+			rc = handle_bad_rnto(sess);
+			continue;
+		}
+		
 		if(lfd_cmdio_cmd_equals(sess, "PASIVE"))
 		{
 			rc = handle_passive(sess);
@@ -127,12 +146,10 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "RMD"))
 		{
-			printf("cmd [%s] args: [%s] \n",sess->ftp_cmd_str, sess->ftp_arg_str);
 			rc = handle_dir_remove(sess);
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "MKD"))
 		{
-			printf("cmd [%s] args: [%s] \n",sess->ftp_cmd_str, sess->ftp_arg_str);
 			rc = handle_dir_create(sess);
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "PWD"))
@@ -141,12 +158,17 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "CWD"))
 		{
-			printf("cmd [%s] args: [%s] \n",sess->ftp_cmd_str, sess->ftp_arg_str);
 			rc = handle_cwd(sess);
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "CDUP"))
 		{
 			rc = handle_cdup(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "RNFR"))
+		{
+			rc = handle_rnfr(sess, &temp_name);
+			if(APR_SUCCESS == rc && NULL != temp_name)
+				rnfrto = 1;
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "TYPE"))
 		{
@@ -160,15 +182,22 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		{
 			rc = handle_stor(sess);
 		}
+		else if(lfd_cmdio_cmd_equals(sess, "DELE"))
+		{
+			rc = handle_dele(sess);
+		}
 		else if(lfd_cmdio_cmd_equals(sess, "STOU"))
 		{
 			rc = handle_stou(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "LIST"))
+		{
+			rc = handle_list(sess);
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "APPE"))
 		{
 			rc = handle_appe(sess);
 		}
-
 		else //default
 		{
 			printf("The cmd [%s] has no installed handler! \n", sess->ftp_cmd_str);
