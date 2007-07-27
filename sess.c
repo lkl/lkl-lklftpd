@@ -6,7 +6,6 @@ const size_t cmd_input_buffer_len = 100;
 apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, apr_socket_t * sock)
 {
 	apr_pool_t	* sess_pool;
-	apr_pool_t	* tmp_pool;
 	apr_pool_t	* loop_pool;
 	apr_status_t	rc;
 	struct lfd_sess	*sess;
@@ -17,14 +16,6 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 	if(APR_SUCCESS != rc)
 	{
 		lfd_log(LFD_ERROR, "lfd_sess_create could not create looop pool. Errorcode: %d", rc);
-		return rc;
-	}
-
-	rc = apr_pool_create(&tmp_pool, sess_pool);
-
-	if(APR_SUCCESS != rc)
-	{
-		lfd_log(LFD_ERROR, "lfd_sess_create could not create temporary pool. Errorcode: %d", rc);
 		return rc;
 	}
 

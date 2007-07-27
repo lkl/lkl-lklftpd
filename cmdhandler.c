@@ -53,7 +53,6 @@ apr_status_t handle_quit(struct lfd_sess * p_sess)
 		lfd_data_sess_destroy(p_sess->data_conn);
 	}
 	lfd_cmdio_write(p_sess,  FTP_GOODBYE, "See you later, aligator.\r\n");
-	lfd_sess_destroy(p_sess);
 	return APR_SUCCESS;
 }
 
