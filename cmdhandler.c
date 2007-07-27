@@ -662,13 +662,16 @@ struct lfd_transfer_ret
 	apr_size_t transferred;
 
 };
-static struct lfd_transfer_ret do_file_send_rwloop(struct lfd_sess* p_sess, apr_socket_t * sock, lkl_file_t * file_fd, int is_ascii)
+static struct lfd_transfer_ret do_file_send_rwloop(struct lfd_sess* p_sess, lkl_file_t * file_fd, int is_ascii)
 {
-	char* p_readbuf;
-	char* p_asciibuf;
+	char		* p_readbuf;
+	char		* p_asciibuf;
+	char		* p_writefrom_buf;
+	apr_size_t 	  chunk_size = 4096;
+	apr_socket_t	* sock = p_sess->data_conn->data_sock;
 	struct lfd_transfer_ret ret_struct = { 0, 0 };
-	apr_size_t chunk_size = 4096;
-	char* p_writefrom_buf;
+
+
 	p_readbuf = apr_palloc(p_sess->loop_pool, is_ascii?VSFTP_DATA_BUFSIZE*2:VSFTP_DATA_BUFSIZE);
 	p_asciibuf= apr_palloc(p_sess->loop_pool, VSFTP_DATA_BUFSIZE*2);
 
@@ -801,7 +804,7 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 		return APR_EINVAL;
 	}
 
-	trans_ret = do_file_send_rwloop(sess, remote_fd, file, sess->is_ascii);
+	trans_ret = do_file_send_rwloop(sess, file, sess->is_ascii);
 	lfd_dispose_transfer_fd(sess);
 
 	if (-1 == trans_ret.retval)
@@ -950,7 +953,7 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 		return rc;
 	}
 
-	if (!is_append && offset != 0)
+	if (!is_append && 0 != offset)
 	{
 		/* XXX - warning, allows seek past end of file! Check for seek > size? */
 		rc = lkl_file_seek(file, APR_SET, &offset);
@@ -981,11 +984,11 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 	lfd_dispose_transfer_fd(sess);
 	sess->data_conn->transfer_size = trans_ret.transferred;
 	/* XXX - handle failure, delete file? */
-	if (trans_ret.retval == -1)
+	if (-1 == trans_ret.retval)
 	{
 		lfd_cmdio_write(sess, FTP_BADSENDFILE, "Failure writing to local file.");
 	}
-	else if (trans_ret.retval == -2)
+	else if (-2 == trans_ret.retval)
 	{
 		lfd_cmdio_write(sess, FTP_BADSENDNET, "Failure reading network stream.");
 	}
