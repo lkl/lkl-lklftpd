@@ -763,7 +763,7 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 	resolve_tilde(&sess->ftp_arg_str, sess);
 
 
-	rc = lkl_file_open(&file, sess->ftp_arg_str, APR_FOPEN_READ|APR_FOPEN_BINARY|APR_FOPEN_LARGEFILE, 0, sess->loop_pool);
+	rc = lkl_file_open(&file, sess->ftp_arg_str, APR_FOPEN_READ|APR_FOPEN_BINARY, 0, sess->loop_pool);
 	if(APR_SUCCESS != rc)
 	{
 		lfd_cmdio_write(sess, FTP_FILEFAIL, "Failed to open file.");
@@ -804,11 +804,11 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 	trans_ret = do_file_send_rwloop(sess, remote_fd, file, sess->is_ascii);
 	lfd_dispose_transfer_fd(sess);
 
-	if (trans_ret.retval == -1)
+	if (-1 == trans_ret.retval)
 	{
 		lfd_cmdio_write(sess, FTP_BADSENDFILE, "Failure reading local file.");
 	}
-	else if (trans_ret.retval == -2)
+	else if (-2 == trans_ret.retval)
 	{
 		lfd_cmdio_write(sess, FTP_BADSENDNET, "Failure writing network stream.");
 	}
@@ -823,6 +823,200 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 	lkl_file_close(file);
 
 	return APR_SUCCESS;
+}
+
+
+static char* get_unique_filename(char * base_str, apr_pool_t * pool)
+{
+	// Use silly wu-ftpd algorithm for compatibility
+	// same algorithm is employed by the vsftpd for the same reasons
+	char		* dest_str = NULL;
+	apr_finfo_t	  finfo;
+	unsigned int	  suffix = 1;
+	apr_status_t	  rc;
+	while (1)
+	{
+		dest_str = apr_psprintf(pool, "%s.%u", base_str, suffix);
+
+		rc = apr_stat(&finfo, dest_str, APR_FINFO_TYPE, pool);
+		//insuccess should be seen as an "error while finding the file."
+		// This is good, if no file is found then we should have an unique filename in "dest_str".
+		// Also this is moronically race prone: we should use kernel-based unique filename generators.
+		if(APR_SUCCESS != rc)
+		{
+			return dest_str;
+		}
+		++suffix;
+	}
+}
+
+static struct lfd_transfer_ret do_file_recv(struct lfd_sess* p_sess, lkl_file_t * file_fd, int is_ascii)
+{
+	apr_off_t num_to_write;
+	struct lfd_transfer_ret ret_struct = { 0, 0 };
+	apr_off_t chunk_size = VSFTP_DATA_BUFSIZE;
+	int prev_cr = 0;
+
+	/* Now that we do ASCII conversion properly, the plus one is to cater for
+		* the fact we may need to stick a '\r' at the front of the buffer if the
+		* last buffer fragment eneded in a '\r' and the current buffer fragment
+		* does not start with a '\n'.
+	*/
+	char * p_recvbuf = apr_palloc(p_sess->loop_pool, VSFTP_DATA_BUFSIZE + 1);
+
+	while (1)
+	{
+		apr_status_t rc;
+		apr_size_t bytes_recvd = chunk_size;
+		apr_size_t bytes_written;
+		const char* p_writebuf = p_recvbuf + 1;
+
+		rc = apr_socket_recv(p_sess->data_conn->data_sock, p_recvbuf + 1, &bytes_recvd);
+		if((APR_SUCCESS != rc) && (APR_EOF != rc))
+		{
+			lfd_log(LFD_ERROR, "apr_socket_recv in do_file_recv failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(p_sess, rc));
+			ret_struct.retval = -2;
+			return ret_struct;
+		}
+		else if (0 == bytes_recvd && !prev_cr && (APR_EOF == rc))
+		{
+			/* Transfer done, nifty */
+			return ret_struct;
+		}
+		num_to_write = bytes_recvd;
+		ret_struct.transferred += num_to_write;
+		if (is_ascii)
+		{
+			/* Handle ASCII conversion if we have to. Note that using the same
+			* buffer for source and destination is safe, because the ASCII ->
+			* binary transform only ever results in a smaller file.
+			*/
+			struct ascii_to_bin_ret ret = lfd_ascii_ascii_to_bin(p_recvbuf, num_to_write, prev_cr);
+			num_to_write = ret.stored;
+			prev_cr = ret.last_was_cr;
+			p_writebuf = ret.p_buf;
+		}
+		rc = lkl_file_write_full(file_fd, p_writebuf, num_to_write, &bytes_written);
+		if((APR_SUCCESS != rc) || (num_to_write != bytes_written))
+		{
+			lfd_log(LFD_ERROR, "lkl_file_write_full in do_file_recv failed with errorcode[%d] and error message[%s]. "
+					"Bytes that had to be written [%d]."
+					"Bytes that  got      written [%d].",
+					rc, lfd_sess_strerror(p_sess, rc), num_to_write, bytes_written);
+			ret_struct.retval = -1;
+			return ret_struct;
+		}
+	}
+}
+
+
+static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, int is_unique)
+{
+	char			* msg;
+	char			* filename;
+	apr_off_t		  offset = sess->restart_pos;
+	apr_status_t		  rc;
+	apr_int32_t		  flags;
+	lkl_file_t 		* file;
+	apr_socket_t		* remote_fd;
+	struct lfd_transfer_ret   trans_ret;
+
+	sess->restart_pos = 0;
+
+	if (!data_transfer_checks_ok(sess))
+	{
+		return APR_EINVAL;
+	}
+	resolve_tilde(&sess->ftp_arg_str, sess);
+	if (is_unique)
+	{
+		filename = get_unique_filename(sess->ftp_arg_str, sess->loop_pool);
+	}
+	else
+	{
+		filename = sess->ftp_arg_str;
+	}
+
+	flags = APR_FOPEN_CREATE | APR_FOPEN_WRITE | APR_FOPEN_APPEND | APR_FOPEN_BINARY;
+	if (!is_append && (0 == offset))
+	{
+		flags |= APR_FOPEN_TRUNCATE;
+	}
+	rc = lkl_file_open(&file, filename, flags, 0, sess->loop_pool);
+	if(APR_SUCCESS != rc)
+	{
+		lfd_log(LFD_ERROR, "lkl_file_open failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_cmdio_write(sess, FTP_UPLOADFAIL, "Could not create file.");
+		return rc;
+	}
+
+	if (!is_append && offset != 0)
+	{
+		/* XXX - warning, allows seek past end of file! Check for seek > size? */
+		rc = lkl_file_seek(file, APR_SET, &offset);
+		if(APR_SUCCESS != rc)
+		{
+			lfd_log(LFD_ERROR, "lkl_file_seek handle_uppload_common failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+			lfd_cmdio_write(sess, FTP_UPLOADFAIL, "Could not seek into file.");
+			return rc;
+		}
+	}
+
+	msg = "Ok to send data.";
+	if (is_unique) //overwrite msg
+	{
+		msg = apr_pstrcat(sess->loop_pool, "FILE: ", filename, NULL);
+		rc = lfd_cmdio_write(sess, FTP_DATACONN, msg);
+		if(APR_SUCCESS != rc)
+		{
+			return rc;
+		}
+	}
+	remote_fd = get_remote_transfer_fd(sess, msg);
+	if(NULL == remote_fd)
+	{
+		return rc;
+	}
+	trans_ret = do_file_recv(sess, file, sess->is_ascii);
+	lfd_dispose_transfer_fd(sess);
+	sess->data_conn->transfer_size = trans_ret.transferred;
+	/* XXX - handle failure, delete file? */
+	if (trans_ret.retval == -1)
+	{
+		lfd_cmdio_write(sess, FTP_BADSENDFILE, "Failure writing to local file.");
+	}
+	else if (trans_ret.retval == -2)
+	{
+		lfd_cmdio_write(sess, FTP_BADSENDNET, "Failure reading network stream.");
+	}
+	else
+	{
+		lfd_cmdio_write(sess, FTP_TRANSFEROK, "File receive OK.");
+	}
+	check_abor(sess);
+	port_cleanup(sess);
+	pasv_cleanup(sess);
+	lkl_file_close(file);
+	return APR_SUCCESS;
+}
+
+
+
+apr_status_t handle_stor(struct lfd_sess *sess)
+{
+	return handle_upload_common(sess, 0, 0);
+}
+
+
+apr_status_t handle_appe(struct lfd_sess *sess)
+{
+	return handle_upload_common(sess, 1, 0);
+}
+
+
+apr_status_t handle_stou(struct lfd_sess *sess)
+{
+	return handle_upload_common(sess, 0, 1);
 }
 
 

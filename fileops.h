@@ -29,7 +29,7 @@
 #define lkl_file_seek		apr_file_seek
 #define lkl_file_lock		apr_file_lock
 #define lkl_file_unlock		apr_file_unlock
-
+#define lkl_file_write_full	apr_file_write_full
 
 
 

@@ -156,6 +156,18 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		{
 			rc = handle_retr(sess);
 		}
+		else if(lfd_cmdio_cmd_equals(sess, "STOR"))
+		{
+			rc = handle_stor(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "STOU"))
+		{
+			rc = handle_stou(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "APPE"))
+		{
+			rc = handle_appe(sess);
+		}
 
 		else //default
 		{
