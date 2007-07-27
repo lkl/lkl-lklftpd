@@ -25,7 +25,7 @@ static apr_status_t emit_greeting(struct lfd_sess * p_sess)
 
 static int lfd_cmdio_cmd_equals(struct lfd_sess*sess, const char * cmd)
 {
-	return (!sess->ftp_cmd_str) && (0 == apr_strnatcasecmp(sess->ftp_cmd_str, cmd));
+	return sess->ftp_cmd_str && (0 == apr_strnatcasecmp(sess->ftp_cmd_str, cmd));
 }
 
 

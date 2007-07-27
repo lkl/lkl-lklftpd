@@ -19,7 +19,7 @@ int handle_user_cmd(struct lfd_sess* p_sess)
 int handle_pass_cmd(struct lfd_sess* p_sess)
 {
 	//TODO: this is a hardcoded value! we need to check the passwd of the system!
-	return (0 == apr_strnatcasecmp(p_sess->passwd, p_sess->ftp_arg_str) );
+	return p_sess->ftp_arg_str && (0 == apr_strnatcasecmp(p_sess->passwd, p_sess->ftp_arg_str) );
 }
 
 apr_status_t handle_passive(struct lfd_sess * sess)
