@@ -837,14 +837,21 @@ static char* get_unique_filename(char * base_str, apr_pool_t * pool)
 	apr_finfo_t	  finfo;
 	unsigned int	  suffix = 1;
 	apr_status_t	  rc;
+
+	//apr_stat insuccess should be seen as an "error while finding the file."
+		// This is good, if no file is found then we should have an unique filename in "dest_str".
+
+	rc = apr_stat(&finfo, base_str, APR_FINFO_TYPE, pool);
+	if(APR_SUCCESS != rc)
+	{
+		return base_str;
+	}
+
+	// Also this is moronically race prone: we should use kernel-based unique filename generators.
 	while (1)
 	{
 		dest_str = apr_psprintf(pool, "%s.%u", base_str, suffix);
-
 		rc = apr_stat(&finfo, dest_str, APR_FINFO_TYPE, pool);
-		//insuccess should be seen as an "error while finding the file."
-		// This is good, if no file is found then we should have an unique filename in "dest_str".
-		// Also this is moronically race prone: we should use kernel-based unique filename generators.
 		if(APR_SUCCESS != rc)
 		{
 			return dest_str;
@@ -996,6 +1003,7 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 	{
 		lfd_cmdio_write(sess, FTP_TRANSFEROK, "File receive OK.");
 	}
+	//apr_socket_close(sess->data_conn->data_sock);
 	check_abor(sess);
 	port_cleanup(sess);
 	pasv_cleanup(sess);

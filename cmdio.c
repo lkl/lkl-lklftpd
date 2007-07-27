@@ -36,19 +36,14 @@ apr_status_t lfd_cmdio_write(struct lfd_sess * sess, int cmd, const char *msg, .
 	{
 		return rc;
 	}
+
+	msg = apr_pstrcat(sess->loop_pool, msg, "\n", NULL);
+
 	va_start(ap, msg);
+
 	buff = apr_pvsprintf(sess->loop_pool, msg, ap);
 	len = strlen(buff);
-	if(NULL != buff)
-	{
-		rc = apr_socket_send(sess->comm_sock, buff, &len);
-		if(APR_SUCCESS == rc)
-		{
-			len = 1;
-			buff = "\n";
-			rc = apr_socket_send(sess->comm_sock, buff, &len);
-		}
-	}
+	rc = apr_socket_send(sess->comm_sock, buff, &len);
 	va_end(ap);
 	return rc;
 }
