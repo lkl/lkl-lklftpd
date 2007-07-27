@@ -1,4 +1,5 @@
 #include <apr_strings.h>
+#include <apr_tables.h>
 
 #include "cmdhandler.h"
 #include "ftpcodes.h"
@@ -828,3 +829,64 @@ apr_status_t handle_dele(struct lfd_sess * p_sess)
 	return ret;
 }
 
+static apr_status_t list_dir(apr_array_header_t *files, const char * directory, apr_pool_t * pool)
+{
+	apr_pool_t *hash_pool = files->pool; // array pool
+	char * child_path;
+	apr_dir_t *dir;
+	apr_finfo_t finfo;
+	apr_status_t apr_err;
+	apr_int32_t flags = APR_FINFO_TYPE | APR_FINFO_NAME;
+	
+	apr_err =apr_dir_open(&dir, directory, pool);
+	if(apr_err)
+		return apr_err;
+	
+	for(apr_err = apr_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS;
+		    apr_err = apr_dir_read(&finfo, flags, dir))
+	{
+		if(finfo.filetype == APR_DIR && ((finfo.name[0] == '.' && finfo.name[1]=='\0') ||
+						(finfo.name[1] == '.' && finfo.name[2] =='\0')))
+			continue;
+		child_path = apr_pstrdup(hash_pool, finfo.name);
+		(*(const char **) apr_array_push (files) ) = child_path; 
+	}
+	apr_dir_close(dir);
+	return APR_SUCCESS;
+}
+
+apr_status_t handle_list(struct lfd_sess *p_sess)
+{
+	apr_array_header_t *list_head;
+	apr_status_t ret;
+	char * file_list;
+	char *path;
+	
+	list_head = apr_array_make(p_sess->loop_pool, 0, sizeof(char*));
+	// if the arg was NULL, take the current directory
+	if(NULL == p_sess->ftp_arg_str)
+	{
+		if(0 == apr_strnatcmp(p_sess->rel_path, "/"))
+			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str,NULL);
+		else
+			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1,NULL);
+	}
+	else
+		path = get_abs_path(p_sess);
+	if(NULL == path)
+	{
+		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
+		return APR_EINVAL;
+	}
+	
+	ret = list_dir(list_head, path, p_sess->loop_pool);
+	if(APR_SUCCESS != ret)
+	{
+		lfd_log(LFD_ERROR, "list_dir failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
+		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot list files.");
+		return ret;
+	}
+	file_list = apr_array_pstrcat(p_sess->loop_pool, list_head, '\n');
+	ret = lfd_cmdio_write(p_sess, FTP_ALLOOK,"\n%s", file_list);
+	return ret;
+}
