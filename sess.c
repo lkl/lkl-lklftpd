@@ -29,7 +29,6 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 
 	sess->data_conn = apr_pcalloc(sess_pool, sizeof(struct lfd_data_sess));
 
-	sess->rel_path = "/";
 	return APR_SUCCESS;
 }
 

@@ -83,9 +83,9 @@ static char * get_abs_path(struct lfd_sess *p_sess)
 	char * path;
 
 	if('/' == *(p_sess->ftp_arg_str))
-		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
+		path = apr_pstrdup(p_sess->loop_pool, p_sess->ftp_arg_str);
 	else
-		if(0 ==apr_strnatcmp(p_sess->rel_path, "/"))
+		if(0 == apr_strnatcmp(p_sess->rel_path, "/"))
 			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str, NULL);
 	else
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1,"/", p_sess->ftp_arg_str, NULL);
@@ -219,11 +219,11 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 
 	// add to the current rel_path ftp_arg_str
 	if('/' == *(p_sess->ftp_arg_str))
-		p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"%s",p_sess->ftp_arg_str);
+		p_sess->rel_path = apr_psprintf(p_sess->sess_pool,"%s",p_sess->ftp_arg_str);
 	else if( 0 == apr_strnatcmp(p_sess->rel_path,"/"))
-		p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"/%s", p_sess->ftp_arg_str);
+		p_sess->rel_path = apr_psprintf(p_sess->sess_pool,"/%s", p_sess->ftp_arg_str);
 	else
-		p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"%s/%s", p_sess->rel_path, p_sess->ftp_arg_str);
+		p_sess->rel_path = apr_psprintf(p_sess->sess_pool,"%s/%s", p_sess->rel_path, p_sess->ftp_arg_str);
 
 	ret = lfd_cmdio_write(p_sess, FTP_CWDOK, "Directory changed to %s.", p_sess->rel_path);
 
@@ -1045,7 +1045,6 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 	apr_status_t	  apr_err;
 	apr_int32_t	  flags = APR_FINFO_TYPE | APR_FINFO_NAME | APR_FINFO_SIZE;
 
-
 	apr_err = apr_dir_open(&dir, directory, pool);
 	if(APR_SUCCESS != apr_err)
 	{
@@ -1081,8 +1080,8 @@ apr_status_t handle_list(struct lfd_sess *p_sess)
 	// if the arg was NULL, take the current directory
 	if(NULL == p_sess->ftp_arg_str)
 	{
-		if(0 == apr_strnatcmp(p_sess->rel_path, "/"))
-			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str,NULL);
+		if('/' == *p_sess->rel_path)
+			path = apr_pstrcat(p_sess->loop_pool, p_sess->rel_path, NULL);
 		else
 			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1,NULL);
 	}
