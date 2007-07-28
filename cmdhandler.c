@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include <apr_strings.h>
 #include <apr_tables.h>
 
@@ -15,6 +17,7 @@ int handle_user_cmd(struct lfd_sess* p_sess)
 {
 	//TODO: this is a hardcoded value! we need to check the user of the system!
 	//return (0 == apr_strnatcasecmp(p_sess->user, p_sess->ftp_arg_str));
+	p_sess->user = apr_pstrdup(p_sess->loop_pool, p_sess->ftp_arg_str);
 	return 1;
 }
 
@@ -78,7 +81,7 @@ apr_status_t handle_abort(struct lfd_sess* p_sess)
 static char * get_abs_path(struct lfd_sess *p_sess)
 {
 	char * path;
-	
+
 	if('/' == *(p_sess->ftp_arg_str))
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
 	else
@@ -92,7 +95,7 @@ static char * get_abs_path(struct lfd_sess *p_sess)
 static char * get_rel_path(struct lfd_sess *p_sess)
 {
 	char *rpath;
-	
+
 	if('/' == *(p_sess->ftp_arg_str))
 		rpath = p_sess->ftp_arg_str;
 	else
@@ -109,7 +112,7 @@ apr_status_t handle_dir_remove(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
 	char * path ,*rpath;
-	
+
 	ret = APR_SUCCESS;
 	if(NULL == p_sess->ftp_arg_str)
 	{
@@ -143,7 +146,7 @@ apr_status_t handle_dir_create(struct lfd_sess *p_sess)
 	apr_status_t ret;
 	char * path ,*rpath;
 	apr_finfo_t finfo;
-	
+
 	ret = APR_SUCCESS;
 	if(NULL == p_sess->ftp_arg_str)
 	{
@@ -181,7 +184,7 @@ apr_status_t handle_dir_create(struct lfd_sess *p_sess)
 apr_status_t handle_pwd(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
-	
+
 	ret = lfd_cmdio_write(p_sess, FTP_PWDOK,p_sess->rel_path);
 	return ret;
 }
@@ -198,9 +201,9 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Command must have an argument.");
 		return ret;
 	}
-	
+
 	path = get_abs_path(p_sess);
-	
+
 	if(NULL == path)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
@@ -213,17 +216,17 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 		ret = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "%s is not a directory.", p_sess->ftp_arg_str);
 		return ret;
 	}
-	
+
 	// add to the current rel_path ftp_arg_str
 	if('/' == *(p_sess->ftp_arg_str))
 		p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"%s",p_sess->ftp_arg_str);
 	else if( 0 == apr_strnatcmp(p_sess->rel_path,"/"))
 		p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"/%s", p_sess->ftp_arg_str);
-	else 
-		p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"%s/%s", p_sess->rel_path, p_sess->ftp_arg_str); 
-	
+	else
+		p_sess->rel_path = apr_psprintf(p_sess->loop_pool,"%s/%s", p_sess->rel_path, p_sess->ftp_arg_str);
+
 	ret = lfd_cmdio_write(p_sess, FTP_CWDOK, "Directory changed to %s.", p_sess->rel_path);
-	
+
 	return ret;
 }
 
@@ -231,7 +234,7 @@ apr_status_t handle_cdup(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
 	char * pos, * last;
-	
+
 	ret = APR_SUCCESS;
 	// shouldn't have an argument
 	// changes the current directory with it's parent
@@ -246,14 +249,14 @@ apr_status_t handle_cdup(struct lfd_sess *p_sess)
 	{
 		if(*pos == '/')
 			last = pos;
-		pos++; 
+		pos++;
 	}
-	// end the string here, before pos 
+	// end the string here, before pos
 	if(last == p_sess->rel_path)
 		p_sess->rel_path = "/";
 	else
 		*last = '\0';
-	
+
 	ret = lfd_cmdio_write(p_sess, FTP_ALLOOK, "Changed to directory %s.",p_sess->rel_path);
 	return ret;
 }
@@ -263,7 +266,7 @@ apr_status_t handle_rnfr(struct lfd_sess *p_sess, char ** temp_path)
 	apr_status_t ret;
 	apr_finfo_t finfo;
 	char * path;
-	
+
 	*temp_path = NULL;
 	ret = APR_SUCCESS;
 	if(NULL == p_sess->ftp_arg_str)
@@ -272,7 +275,7 @@ apr_status_t handle_rnfr(struct lfd_sess *p_sess, char ** temp_path)
 		return ret;
 	}
 	path = get_abs_path(p_sess);
-	
+
 	if(NULL == path)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
@@ -293,11 +296,11 @@ apr_status_t handle_rnfr(struct lfd_sess *p_sess, char ** temp_path)
 apr_status_t handle_bad_rnto(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
-	
+
 	ret = lfd_cmdio_write(p_sess, FTP_BADPROT, "Bad sequence of commands.");
 	return ret;
 }
-	
+
 apr_status_t handle_rnto(struct lfd_sess *p_sess, char * old_path)
 {
 	apr_status_t ret;
@@ -309,16 +312,16 @@ apr_status_t handle_rnto(struct lfd_sess *p_sess, char * old_path)
 		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Bad command argument.");
 		return ret;
 	}
-	
+
 	// obtain the new path and call lkl_file_rename
 	path = get_abs_path(p_sess);
-	
+
 	ret = lkl_file_rename(old_path, path, p_sess->loop_pool);
-	
+
 	if(APR_SUCCESS != ret)
 	{
 		lfd_log(LFD_ERROR, "lkl_file_rename failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
-		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot rename directory/file %s.", p_sess->ftp_arg_str);	
+		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot rename directory/file %s.", p_sess->ftp_arg_str);
 	}
 	else
 		ret = lfd_cmdio_write(p_sess, FTP_RENAMEOK, "Directory/file was succesfully renamed.");
@@ -743,7 +746,7 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 
 	rc = lkl_file_open(&file, sess->ftp_arg_str, APR_FOPEN_READ|APR_FOPEN_BINARY, 0, sess->loop_pool);
 	// build the complete file path here -TODO - use get_abs_path(sess)
-	
+
 	rc = lkl_file_open(&file, sess->ftp_arg_str, APR_FOPEN_READ|APR_FOPEN_BINARY|APR_FOPEN_LARGEFILE|APR_FOPEN_SENDFILE_ENABLED, 0, sess->loop_pool);
 	if(APR_SUCCESS != rc)
 	{
@@ -810,21 +813,21 @@ apr_status_t handle_dele(struct lfd_sess * p_sess)
 {
 	apr_status_t ret;
 	char * path;
-	
+
 	if(NULL == p_sess->ftp_arg_str)
 	{
 		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Bad command argument.");
 		return ret;
 	}
-	
+
 	path = get_abs_path(p_sess);
-	
+
 	if(NULL == path)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
-	
+
 	ret = lkl_file_remove(path, p_sess->loop_pool);
 	if(APR_SUCCESS !=ret)
 	{
@@ -836,31 +839,6 @@ apr_status_t handle_dele(struct lfd_sess * p_sess)
 	return ret;
 }
 
-static apr_status_t list_dir(apr_array_header_t *files, const char * directory, apr_pool_t * pool)
-{
-	apr_pool_t *hash_pool = files->pool; // array pool
-	char * child_path;
-	apr_dir_t *dir;
-	apr_finfo_t finfo;
-	apr_status_t apr_err;
-	apr_int32_t flags = APR_FINFO_TYPE | APR_FINFO_NAME;
-	
-	apr_err =apr_dir_open(&dir, directory, pool);
-	if(apr_err)
-		return apr_err;
-	
-	for(apr_err = apr_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS;
-		    apr_err = apr_dir_read(&finfo, flags, dir))
-	{
-		if(finfo.filetype == APR_DIR && ((finfo.name[0] == '.' && finfo.name[1]=='\0') ||
-						(finfo.name[1] == '.' && finfo.name[2] =='\0')))
-			continue;
-		child_path = apr_pstrdup(hash_pool, finfo.name);
-		(*(const char **) apr_array_push (files) ) = child_path; 
-	}
-	apr_dir_close(dir);
-	return APR_SUCCESS;
-}
 
 static char* get_unique_filename(char * base_str, apr_pool_t * pool)
 {
@@ -1016,7 +994,7 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 	remote_fd = get_remote_transfer_fd(sess, msg);
 	if(NULL == remote_fd)
 	{
-		return rc;
+		return APR_EINVAL;
 	}
 	trans_ret = do_file_recv(sess, file, sess->is_ascii);
 	lfd_dispose_transfer_fd(sess);
@@ -1059,14 +1037,47 @@ apr_status_t handle_stou(struct lfd_sess *sess)
 	return handle_upload_common(sess, 0, 1);
 }
 
+
+static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** p_dest)
+{
+	apr_dir_t	* dir;
+	apr_finfo_t	  finfo;
+	apr_status_t	  apr_err;
+	apr_int32_t	  flags = APR_FINFO_TYPE | APR_FINFO_NAME | APR_FINFO_SIZE;
+
+
+	apr_err = apr_dir_open(&dir, directory, pool);
+	if(APR_SUCCESS != apr_err)
+	{
+		*p_dest = "\r\n";
+		return apr_err;
+	}
+	else
+	{
+		*p_dest = "";
+	}
+
+	for(apr_err = apr_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS;
+		   apr_err = apr_dir_read(&finfo, flags, dir))
+	{
+		if(finfo.filetype == APR_DIR && ((finfo.name[0] == '.' && finfo.name[1] == '\0') ||
+				 ( finfo.name[1] == '.' && finfo.name[2] == '\0')))
+			continue;
+		*p_dest = apr_pstrcat(pool, *p_dest, finfo.name, "\r\n", NULL);
+	}
+	apr_dir_close(dir);
+	return APR_SUCCESS;
+}
+
+
 apr_status_t handle_list(struct lfd_sess *p_sess)
 {
-	apr_array_header_t *list_head;
-	apr_status_t ret;
-	char * file_list;
-	char *path;
-	
-	list_head = apr_array_make(p_sess->loop_pool, 0, sizeof(char*));
+	apr_socket_t 		* remote_fd;
+	apr_status_t		  ret;
+	apr_size_t		  file_list_len, bytes_written;
+	char			* file_list;
+	char			* path;
+
 	// if the arg was NULL, take the current directory
 	if(NULL == p_sess->ftp_arg_str)
 	{
@@ -1082,15 +1093,33 @@ apr_status_t handle_list(struct lfd_sess *p_sess)
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
-	
-	ret = list_dir(list_head, path, p_sess->loop_pool);
+
+	ret = list_dir(path, p_sess->loop_pool, &file_list);
 	if(APR_SUCCESS != ret)
 	{
 		lfd_log(LFD_ERROR, "list_dir failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
 		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot list files.");
 		return ret;
 	}
-	file_list = apr_array_pstrcat(p_sess->loop_pool, list_head, '\n');
-	ret = lfd_cmdio_write(p_sess, FTP_ALLOOK,"\n%s", file_list);
+	file_list_len = bytes_written = strlen(file_list);
+
+	remote_fd = get_remote_transfer_fd(p_sess, "Here comes the directory listing");
+	if(NULL == remote_fd)
+	{
+		return APR_EINVAL;
+	}
+	ret = apr_socket_send(remote_fd, file_list, &bytes_written);
+	if((APR_SUCCESS == ret) && (file_list_len == bytes_written))
+	{
+		ret = lfd_cmdio_write(p_sess, FTP_TRANSFEROK, "Directory sent OK");
+	}
+	else
+	{
+		ret = lfd_cmdio_write(p_sess, FTP_BADSENDNET, "Error sendind data");
+	}
+	lfd_dispose_transfer_fd(p_sess);
+
+
 	return ret;
 }
+

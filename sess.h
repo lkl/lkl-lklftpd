@@ -29,7 +29,8 @@ struct lfd_sess
 	char 			* cmd_input_buffer;		//buffer used for reading commands
 	char			* dbg_strerror_buffer; 		//this buffer is used to map string error numbers to error descriptions.
 	char			* user;				// the user's name for this session
-	char			* passwd;			// user's password for this session
+	//TODO:### decide if this is needed:
+	//char			* passwd;			// user's password for this session
 	char			* home_str;			// user's home directory. ALWAYS WITH A TRAILING SLASH!
 	char			* ftp_cmd_str;			// command body
 	char			* ftp_arg_str;			// command argument
@@ -37,8 +38,8 @@ struct lfd_sess
 								// changed by the user;
 	apr_socket_t		* pasv_listen_fd;		//PASSIVE listen descriptor
 	apr_sockaddr_t		* p_port_sockaddr;		//port configured by PORT to be used by ### TODO insert where it's supposed to be used
-	apr_off_t		restart_pos;			//REST value.
-	int 			is_ascii;			//current mode is ASCII.
+	apr_off_t		  restart_pos;			//REST value.
+	int 			  is_ascii;			//current mode is ASCII.
 };
 extern const size_t cmd_input_buffer_len;	//length of lfd_sess.cmd_input_buffer
 
