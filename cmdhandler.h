@@ -20,6 +20,7 @@ apr_status_t handle_active(struct lfd_sess * sess);
 apr_status_t handle_syst(struct lfd_sess * sess);
 apr_status_t handle_type(struct lfd_sess *psess);
 apr_status_t handle_port(struct lfd_sess* p_sess);
+apr_status_t handle_site(struct lfd_sess* p_sess);
 
 
 // file transfer/status commands

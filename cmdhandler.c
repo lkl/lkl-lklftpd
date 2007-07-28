@@ -1122,3 +1122,92 @@ apr_status_t handle_list(struct lfd_sess *p_sess)
 	return ret;
 }
 
+apr_status_t handle_site(struct lfd_sess* p_sess)
+{
+	apr_status_t rc = APR_SUCCESS;
+	if (0 == apr_strnatcasecmp("CHMOD", p_sess->ftp_arg_str) )
+	{
+		lfd_log(LFD_ERROR, "SITE CHMOD NIMPL");
+	}
+	else if (0 == apr_strnatcasecmp("UMASK", p_sess->ftp_arg_str) )
+	{
+		lfd_log(LFD_ERROR, "SITE UMASK NIMPL");
+	}
+	else if (0 == apr_strnatcasecmp("HELP", p_sess->ftp_arg_str) )
+	{
+		rc = lfd_cmdio_write(p_sess, FTP_SITEHELP, "CHMOD UMASK HELP");
+	}
+	else
+	{
+		rc = lfd_cmdio_write(p_sess, FTP_BADCMD, "Unknown SITE command.");
+	}
+	return rc;
+}
+/*
+
+static void
+		handle_site_chmod(struct vsf_session* p_sess, struct mystr* p_arg_str)
+{
+	static struct mystr s_chmod_file_str;
+	unsigned int perms;
+	int retval;
+	if (str_isempty(p_arg_str))
+	{
+		vsf_cmdio_write(p_sess, FTP_BADCMD, "SITE CHMOD needs 2 arguments.");
+		return;
+	}
+	str_split_char(p_arg_str, &s_chmod_file_str, ' ');
+	if (str_isempty(&s_chmod_file_str))
+	{
+		vsf_cmdio_write(p_sess, FTP_BADCMD, "SITE CHMOD needs 2 arguments.");
+		return;
+	}
+	resolve_tilde(&s_chmod_file_str, p_sess);
+	vsf_log_start_entry(p_sess, kVSFLogEntryChmod);
+	str_copy(&p_sess->log_str, &s_chmod_file_str);
+	prepend_path_to_filename(&p_sess->log_str);
+	str_append_char(&p_sess->log_str, ' ');
+	str_append_str(&p_sess->log_str, p_arg_str);
+	if (!vsf_access_check_file(&s_chmod_file_str))
+	{
+		vsf_cmdio_write(p_sess, FTP_NOPERM, "Permission denied.");
+		return;
+	}
+	// Don't worry - our chmod() implementation only allows 0 - 0777
+	perms = str_octal_to_uint(p_arg_str);
+	retval = str_chmod(&s_chmod_file_str, perms);
+	if (vsf_sysutil_retval_is_error(retval))
+	{
+		vsf_cmdio_write(p_sess, FTP_FILEFAIL, "SITE CHMOD command failed.");
+	}
+	else
+	{
+		vsf_log_do_log(p_sess, 1);
+		vsf_cmdio_write(p_sess, FTP_CHMODOK, "SITE CHMOD command ok.");
+	}
+}
+
+static void
+		handle_site_umask(struct vsf_session* p_sess, struct mystr* p_arg_str)
+{
+	static struct mystr s_umask_resp_str;
+	if (str_isempty(p_arg_str))
+	{
+		// Empty arg => report current umask
+		str_alloc_text(&s_umask_resp_str, "Your current UMASK is ");
+		str_append_text(&s_umask_resp_str,
+				 vsf_sysutil_uint_to_octal(vsf_sysutil_get_umask()));
+	}
+	else
+	{
+		// Set current umask
+		unsigned int new_umask = str_octal_to_uint(p_arg_str);
+		vsf_sysutil_set_umask(new_umask);
+		str_alloc_text(&s_umask_resp_str, "UMASK set to ");
+		str_append_text(&s_umask_resp_str,
+				 vsf_sysutil_uint_to_octal(vsf_sysutil_get_umask()));
+	}
+	vsf_cmdio_write_str(p_sess, FTP_UMASKOK, &s_umask_resp_str);
+}
+*/
+

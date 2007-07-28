@@ -206,6 +206,10 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		{
 			rc = handle_appe(sess);
 		}
+		else if(lfd_cmdio_cmd_equals(sess, "SITE"))
+		{
+			rc = handle_site(sess);
+		}
 		else if(lfd_cmdio_cmd_equals(sess, "ALLO"))
 		{
 			rc = lfd_cmdio_write(sess, FTP_ALLOOK, "ALLO command ignored.");
