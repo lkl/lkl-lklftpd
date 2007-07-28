@@ -6,7 +6,7 @@
 #include "worker.h"
 #include "sess.h"
 
-
+#define FTP_ENDCOMMAND_SEQUENCE "\r\n"
 apr_status_t lfd_cmdio_write(struct lfd_sess * p_sess, int cmd, const char *msg, ...);
 
 /**

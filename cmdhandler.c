@@ -58,7 +58,7 @@ apr_status_t handle_quit(struct lfd_sess * p_sess)
 		apr_thread_join(&ret, p_sess->data_conn->data_conn_th);
 		lfd_data_sess_destroy(p_sess->data_conn);
 	}
-	lfd_cmdio_write(p_sess,  FTP_GOODBYE, "See you later, aligator.\r\n");
+	lfd_cmdio_write(p_sess,  FTP_GOODBYE, "See you later, aligator." FTP_ENDCOMMAND_SEQUENCE);
 	return APR_SUCCESS;
 }
 
@@ -67,14 +67,14 @@ apr_status_t handle_abort(struct lfd_sess* p_sess)
 	// stop the active data transfer and close the data connection
 	if(0 == p_sess->data_conn->in_progress)
 	{
-		lfd_cmdio_write(p_sess, FTP_ABOR_NOCONN, "Nothing to abort.\r\n");
+		lfd_cmdio_write(p_sess, FTP_ABOR_NOCONN, "Nothing to abort." FTP_ENDCOMMAND_SEQUENCE);
 		return APR_SUCCESS;
 	}
 	if(NULL != p_sess->data_conn->data_conn_th)
 		apr_thread_exit(p_sess->data_conn->data_conn_th, APR_SUCCESS);
 
 	lfd_data_sess_destroy(p_sess->data_conn);
-	lfd_cmdio_write(p_sess, FTP_ABOROK, "File transfer aborted.\r\n");
+	lfd_cmdio_write(p_sess, FTP_ABOROK, "File transfer aborted." FTP_ENDCOMMAND_SEQUENCE);
 	return APR_SUCCESS;
 }
 
@@ -1049,7 +1049,7 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 	apr_err = apr_dir_open(&dir, directory, pool);
 	if(APR_SUCCESS != apr_err)
 	{
-		*p_dest = "\r\n";
+		*p_dest = FTP_ENDCOMMAND_SEQUENCE;
 		return apr_err;
 	}
 	else
@@ -1063,7 +1063,7 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 		if(finfo.filetype == APR_DIR && ((finfo.name[0] == '.' && finfo.name[1] == '\0') ||
 				 ( finfo.name[1] == '.' && finfo.name[2] == '\0')))
 			continue;
-		*p_dest = apr_pstrcat(pool, *p_dest, finfo.name, "\r\n", NULL);
+		*p_dest = apr_pstrcat(pool, *p_dest, finfo.name, FTP_ENDCOMMAND_SEQUENCE, NULL);
 	}
 	apr_dir_close(dir);
 	return APR_SUCCESS;
