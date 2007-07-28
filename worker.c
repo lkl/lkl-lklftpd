@@ -205,6 +205,23 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		{
 			rc = handle_appe(sess);
 		}
+		else if(lfd_cmdio_cmd_equals(sess, "ALLO"))
+		{
+			rc = lfd_cmdio_write(sess, FTP_ALLOOK, "ALLO command ignored.");
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "REIN"))
+		{
+			rc = lfd_cmdio_write(sess, FTP_COMMANDNOTIMPL, "REIN not implemented.");
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "ACCT"))
+		{
+			rc = lfd_cmdio_write(sess, FTP_COMMANDNOTIMPL, "ACCT not implemented.");
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "SMNT"))
+		{
+			rc = lfd_cmdio_write(sess, FTP_COMMANDNOTIMPL, "SMNT not implemented.");
+		}
+
 		else //default
 		{
 			printf("The cmd [%s] has no installed handler! \n", sess->ftp_cmd_str);
