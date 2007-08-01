@@ -459,21 +459,6 @@ apr_status_t lkl_file_mktemp(lkl_file_t **fp, char *templ,
                                           apr_int32_t flags, apr_pool_t *p);
 
 
-/**
- * Find an existing directory suitable as a temporary storage location.
- * @param temp_dir The temp directory.
- * @param p The pool to use for any necessary allocations.
- * @remark
- * This function uses an algorithm to search for a directory that an
- * an application can use for temporary storage.  Once such a
- * directory is found, that location is cached by the library.  Thus,
- * callers only pay the cost of this algorithm once if that one time
- * is successful.
- *
- */
-apr_status_t lkl_temp_dir_get(const char **temp_dir,
-                                           apr_pool_t *p);
-
 
 apr_status_t lkl_stat(apr_finfo_t *finfo, const char* fname, apr_int32_t wanted, apr_pool_t *pool);
 

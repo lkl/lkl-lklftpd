@@ -20,11 +20,11 @@ struct lkl_dir_t
 
 static apr_status_t dir_cleanup(void *thedir)
 {
-    lkl_dir_t *dir = thedir;
-    apr_status_t ret;
-
-    ret = sys_close(dir->fd);
-    return ret;
+	lkl_dir_t *dir = thedir;
+	apr_status_t ret;
+	
+	ret = sys_close(dir->fd);
+	return ret;
 } 
 
 apr_status_t lkl_dir_open(lkl_dir_t **new, const char *dirname, 
@@ -49,7 +49,7 @@ return APR_SUCCESS;
 
 apr_status_t lkl_dir_close(lkl_dir_t *thedir)
 {
-    return apr_pool_cleanup_run(thedir->pool, thedir, dir_cleanup);
+	return apr_pool_cleanup_run(thedir->pool, thedir, dir_cleanup);
 }
 
 
