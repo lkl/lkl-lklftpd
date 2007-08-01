@@ -6,6 +6,7 @@
 #include <apr_file_io.h>
 
 #define lkl_file_t   apr_file_t
+#define lkl_dir_t    apr_dir_t 
 
 #define lkl_file_read		apr_file_read
 #define lkl_file_writev		apr_file_writev
@@ -44,16 +45,12 @@
 #define lkl_stat		apr_stat
 
 #define lkl_dir_make		apr_dir_make
-#define lkl_dir_make_recursive	apr_dir_make_recursive
 #define lkl_dir_remove		apr_dir_remove
 #define lkl_dir_open		apr_dir_open
 #define lkl_dir_close		apr_dir_close
 #define lkl_dir_read		apr_dir_read
-#define lkl_temp_dir_get	apr_temp_dir_get
 
 #else//LKL_FILE_APIS
-
-
 
 #include <apr.h>
 #include <apr_pools.h>
@@ -61,12 +58,26 @@
 #include <apr_errno.h>
 #include <apr_file_info.h>
 #include <apr_inherit.h>
+#include <apr_file_io.h>
+
+#include <linux/fcntl.h>
+#include <linux/types.h>
+#include <linux/dirent.h>
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 struct lkl_file_t;
 typedef struct lkl_file_t lkl_file_t;
+
+struct lkl_dir_t;
+typedef struct lkl_dir_t lkl_dir_t;
+
+
+apr_fileperms_t lkl_unix_mode2perms(mode_t mode);
+mode_t lkl_unix_perms2mode(apr_fileperms_t perms);
+
 apr_status_t lkl_file_open(lkl_file_t **newf, const char *fname,
                                         apr_int32_t flag, apr_fileperms_t perm,
                                         apr_pool_t *pool);
@@ -321,10 +332,7 @@ apr_status_t lkl_file_flush(lkl_file_t *thefile);
  * @remark The third argument is modified to be the offset the pointer
           was actually moved to.
  */
-apr_status_t lkl_file_seek(lkl_file_t *thefile,
-                                   apr_seek_where_t where,
-                                   apr_off_t *offset);
-
+apr_status_t lkl_file_seek(lkl_file_t *thefile, apr_seek_where_t where, apr_off_t *offset);
 
 
 /** file (un)locking functions. */
@@ -405,34 +413,6 @@ apr_status_t lkl_file_attrs_set(const char *fname,
 apr_status_t lkl_file_mtime_set(const char *fname,
                                              apr_time_t mtime,
                                              apr_pool_t *pool);
-
-/**
- * Create a new directory on the file system.
- * @param path the path for the directory to be created. (use / on all systems)
- * @param perm Permissions for the new direcoty.
- * @param pool the pool to use.
- */
-apr_status_t lkl_dir_make(const char *path, apr_fileperms_t perm,
-                                       apr_pool_t *pool);
-
-/** Creates a new directory on the file system, but behaves like
- * 'mkdir -p'. Creates intermediate directories as required. No error
- * will be reported if PATH already exists.
- * @param path the path for the directory to be created. (use / on all systems)
- * @param perm Permissions for the new direcoty.
- * @param pool the pool to use.
- */
-apr_status_t lkl_dir_make_recursive(const char *path,
-                                                 apr_fileperms_t perm,
-                                                 apr_pool_t *pool);
-
-/**
- * Remove directory from the file system.
- * @param path the path for the directory to be removed. (use / on all systems)
- * @param pool the pool to use.
- */
-apr_status_t lkl_dir_remove(const char *path, apr_pool_t *pool);
-
 /**
  * get the specified file's stats.
  * @param finfo Where to store the information about the file.
@@ -504,7 +484,7 @@ apr_status_t lkl_stat(apr_finfo_t *finfo, const char* fname, apr_int32_t wanted,
 * @param cont The pool to use.
 *
 */
-apr_status_t lkl_dir_open (apr_dir_t ** new,const char * dirname,a pr_pool_t *  pool);
+apr_status_t lkl_dir_open (lkl_dir_t ** new,const char * dirname,apr_pool_t *  pool);
 
 /**
 * Read the next entry from the specified directory.
@@ -515,14 +495,31 @@ apr_status_t lkl_dir_open (apr_dir_t ** new,const char * dirname,a pr_pool_t *  
 * No ordering is guaranteed for the entries read.
 *
 */
-apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, apr_dir_t * thedir);
+apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, lkl_dir_t * thedir);
 
 /**
 * Close the specified directory.
 * @param thedir the directory descriptor to close.
 *
 */
-apr_status_t lkl_dir_close(apr_dir_t * thedir);
+apr_status_t lkl_dir_close(lkl_dir_t * thedir);
+
+/**
+* Create a new directory on the file system.
+* @param path 	the path for the directory to be created. (use / on all systems)
+* @param perm 	Permissions for the new direcoty.
+* @param pool 	the pool to use.
+*/
+apr_status_t lkl_dir_make(const char *path, apr_fileperms_t perm, 
+                          apr_pool_t *pool);
+
+/**
+* Remove directory from the file system.
+* @param path 	the path for the directory to be removed. (use / on all systems)
+* @param pool 	the pool to use.
+*/
+apr_status_t lkl_dir_remove(const char *path, apr_pool_t *pool);
+
 
 #ifdef __cplusplus
 }
