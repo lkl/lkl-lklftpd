@@ -3,7 +3,6 @@ DEPS=listen.o main.o worker.o utils.o config.o cmdio.o cmdhandler.o sess.o fileo
 DEFINE_PREFIX=-D
 INCLUDE_PREFIX=-I
 
-GCC=gcc
 RMF=rm -f
 
 LKL_DEFINES=$(DEFINE_PREFIX)_LARGEFILE64_SOURCE
@@ -17,11 +16,13 @@ LDFLAGS=-lapr-1
 TARGET=daemon
 
 .c.o:
-	$(GCC) -c $(CFLAGS) $^
+	$(CC) -c $(CFLAGS) $^
 
 $(TARGET) build:$(DEPS)
-	$(GCC) -o $(TARGET) $(DEPS) $(LDFLAGS)
+	$(CC) -o $(TARGET) $(DEPS) $(LDFLAGS)
+
+.PHONY: clean
 
 clean:
-	$(RMF) $(TARGET) $(DEPS)
+	$(RMF) $(TARGET) $(DEPS) *~
 
