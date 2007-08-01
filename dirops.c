@@ -4,13 +4,17 @@
 
 #include "fileops.h"
 
+#define BUF_SIZE 4096
 
 struct lkl_dir_t 
 {
 	apr_pool_t *pool;
-	char * dirname;
-	int fd; // ( DIR *dirstruct from apr_dir_t)
-	struct dirent *entry;
+	char * dirname; // dir name
+	int fd; // file descriptor
+	char * data; // dir block
+	int offset; // current offset
+	int size; // total valid data
+	struct dirent *entry; // current entry
 };
 
 
@@ -26,25 +30,21 @@ static apr_status_t dir_cleanup(void *thedir)
 apr_status_t lkl_dir_open(lkl_dir_t **new, const char *dirname, 
                           apr_pool_t *pool)
 {
-    apr_size_t dirent_size = 
-        (sizeof((*new)->entry->d_name) > 1 ? 
-         sizeof(struct dirent) : sizeof (struct dirent) + 255);
-    int dir = sys_open(dirname,O_RDONLY|O_DIRECTORY, 0);
+	int dir = sys_open(dirname,O_RDONLY|O_DIRECTORY|O_LARGEFILE, 0);
 
-    if (dir<0) {
-        return APR_EINVAL;
-    }
-
-    (*new) = (lkl_dir_t *) apr_palloc(pool, sizeof(lkl_dir_t));
-
-    (*new)->pool = pool;
-    (*new)->dirname = apr_pstrdup(pool, dirname);
-    (*new)->fd = dir;
-    (*new)->entry = apr_pcalloc(pool, dirent_size);
-
-    apr_pool_cleanup_register((*new)->pool, *new, dir_cleanup,
-                              apr_pool_cleanup_null);
-    return APR_SUCCESS;
+	if (dir<0)
+		return APR_EINVAL;
+	(*new) = (lkl_dir_t *) apr_palloc(pool, sizeof(lkl_dir_t));
+	(*new)->pool = pool;
+	(*new)->dirname = apr_pstrdup(pool, dirname);
+	(*new)->fd = dir;
+	(*new)->size = 0;
+	(*new)->offset = 0;
+	(*new)->entry = NULL;
+	(*new)->data = (char*) apr_pcalloc(pool,BUF_SIZE); 
+	apr_pool_cleanup_register((*new)->pool, *new, dir_cleanup,
+                          apr_pool_cleanup_null);
+return APR_SUCCESS;
 }
 
 apr_status_t lkl_dir_close(lkl_dir_t *thedir)
@@ -99,24 +99,37 @@ static apr_filetype_e filetype_from_dirent_type(int type)
 }
 #endif
 
+struct dirent * lkl_readdir(lkl_dir_t *thedir)
+{
+	struct dirent * de;
+	
+	if(thedir->offset >= thedir->size)
+	{
+		/* We've emptied out our buffer.  Refill it.  */
+		int bytes = sys_getdents(thedir->fd, thedir->data, BUF_SIZE);
+		if(bytes<=0)
+			return NULL;
+		thedir->size = bytes;
+		thedir->offset = 0;
+	}
+	de=(struct dirent*) ((char*) thedir->data+thedir->offset);
+	printf("%s\n",de->d_name);
+	thedir->offset += de->d_reclen;
+	
+	return de;
+}
+
 apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, lkl_dir_t * thedir)
 {
-/*
+
 	apr_status_t ret = 0;
 #ifdef DIRENT_TYPE
 	apr_filetype_e type;
 #endif
-    // We're about to call a non-thread-safe readdir() that may
-	//possibly set `errno', and the logic below actually cares about
-	//errno after the call.  Therefore we need to clear errno first. 
-	errno = 0;
-	thedir->entry = readdir(thedir->fd); // TODO here modify, replace readdir with smth else 
+    // We're about to call a non-thread-safe readdir() 
+	thedir->entry = lkl_readdir(thedir); 
 	if (thedir->entry == NULL) {
-		if (errno == APR_SUCCESS) {
-			ret = APR_ENOENT;
-		}
-		else
-			ret = errno;
+		ret = APR_ENOENT;
 	}
 	finfo->fname = NULL;
 
@@ -181,7 +194,7 @@ apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, lkl_dir_t * t
 
 	if (wanted)
 		return APR_INCOMPLETE;
-*/
+
 	return APR_SUCCESS;
 }
 

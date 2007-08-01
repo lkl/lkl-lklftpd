@@ -1042,18 +1042,18 @@ static apr_status_t list_dir(apr_array_header_t *files, const char * directory, 
 {
 	apr_pool_t *hash_pool = files->pool; // array pool
 	char * child_path;
-#ifndef LKL_FILE_APIS
-	apr_dir_t *dir;
+
+	lkl_dir_t *dir;
 	apr_finfo_t finfo;
 	apr_status_t apr_err;
 	apr_int32_t flags = APR_FINFO_TYPE | APR_FINFO_NAME;
 	
-	apr_err =apr_dir_open(&dir, directory, pool);
+	apr_err =lkl_dir_open(&dir, directory, pool);
 	if(apr_err)
 		return apr_err;
 	
-	for(apr_err = apr_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS;
-		   apr_err = apr_dir_read(&finfo, flags, dir))
+	for(apr_err = lkl_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS;
+		   apr_err = lkl_dir_read(&finfo, flags, dir))
 	{
 		if(finfo.filetype == APR_DIR && ((finfo.name[0] == '.' && finfo.name[1]=='\0') ||
 				 (finfo.name[1] == '.' && finfo.name[2] =='\0')))
@@ -1061,28 +1061,8 @@ static apr_status_t list_dir(apr_array_header_t *files, const char * directory, 
 		child_path = apr_pstrdup(hash_pool, finfo.name);
 		(*(const char **) apr_array_push (files) ) = child_path; 
 	}
-	apr_dir_close(dir);
-#else
-	int fd=sys_open(directory, O_RDONLY|O_LARGEFILE|O_DIRECTORY, 0);
-	if (fd >= 0) 
-	{
-		char x[4096];
-		int count, reclen;
-		struct dirent *de;
-		count=sys_getdents(fd, x, sizeof(x));
-		assert(count>0);
+	lkl_dir_close(dir);
 
-		de=(struct dirent*)x;
-		while (count > 0) 
-		{
-			reclen=de->d_reclen;
-			child_path = apr_pstrdup(hash_pool, de->d_name);
-			(*(const char **) apr_array_push (files) ) = child_path; 
-			de=(struct dirent*)((char*)de+reclen); count-=reclen;
-		}	
-		sys_close(fd);
-	}
-#endif
 	return APR_SUCCESS;
 }
 

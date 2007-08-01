@@ -233,7 +233,7 @@ apr_status_t lkl_stat(apr_finfo_t *finfo,const char *fname, apr_int32_t wanted, 
 		srv = sys_newlstat(fname, &info);
 	else
 		srv = sys_newstat(fname, &info);
-	printf("%s :%o %d %d\n",fname, info.st_mode, info.st_size, info.st_ino);
+	
 	if (srv == 0) 
 	{
 		finfo->pool = pool;
