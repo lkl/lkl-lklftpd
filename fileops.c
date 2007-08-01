@@ -12,7 +12,8 @@
 
 #define APR_FILE_BUFSIZE 4096
 
-struct lkl_file_t {
+struct lkl_file_t 
+{
 	apr_pool_t *pool;
 	int filedes;
 	char *fname;
@@ -110,14 +111,14 @@ apr_status_t lkl_file_flush_locked(lkl_file_t *thefile)
 {
 	apr_status_t rv = APR_SUCCESS;
 	
-	if (thefile->direction == 1 && thefile->bufpos) 
+	if (1 == thefile->direction && thefile->bufpos) 
 	{
 		apr_ssize_t written;
 	
 		do 
 		{
 			written = sys_write(thefile->filedes, thefile->buffer, thefile->bufpos);
-		} while (written == -1 && errno == EINTR);
+		} while (-1 == written && errno == EINTR);
 		if (written == -1) 
 			rv = errno;
 		else 
@@ -148,9 +149,10 @@ apr_status_t lkl_file_flush(lkl_file_t *thefile)
 static apr_status_t file_cleanup(lkl_file_t *file)
 {
 	apr_status_t rv = APR_SUCCESS;
-	apr_status_t ret;
-
-	if ((ret = sys_close(file->filedes)) == 0) 
+	int ret;
+	
+	ret =  sys_close(file->filedes);
+	if (0 == ret) 
 	{
 		file->filedes = -1;
 		if (file->flags & APR_DELONCLOSE) 
@@ -161,7 +163,7 @@ static apr_status_t file_cleanup(lkl_file_t *file)
 	#endif
 	}
 	else
-		rv = ret;
+		rv = -ret;
 	#ifndef WAITIO_USES_POLL
 	if (NULL != file->pollset) 
 	{
@@ -438,6 +440,28 @@ static void fill_out_finfo(apr_finfo_t *finfo, struct stat *info,apr_int32_t wan
 	
 }
 
+apr_status_t lkl_file_info_get(apr_finfo_t *finfo, apr_int32_t wanted, lkl_file_t *thefile)
+{
+	struct stat info;
+	int ret;
+
+	if (thefile->buffered) 
+	{
+		apr_status_t rv = lkl_file_flush(thefile);
+		if (rv != APR_SUCCESS)
+		return rv;
+	}
+	ret = sys_newfstat(thefile->filedes, &info);
+	if (0 == ret) 
+	{
+		finfo->pool = thefile->pool;
+		finfo->fname = thefile->fname;
+		fill_out_finfo(finfo, &info, wanted);
+		return (wanted & ~finfo->valid) ? APR_INCOMPLETE : APR_SUCCESS;
+	}
+	return -ret;
+}
+
 apr_status_t lkl_stat(apr_finfo_t *finfo,const char *fname, apr_int32_t wanted, apr_pool_t *pool)
 {
 	struct stat info;
@@ -449,7 +473,7 @@ apr_status_t lkl_stat(apr_finfo_t *finfo,const char *fname, apr_int32_t wanted, 
 	else
 		srv = sys_newstat(fname, &info);
 	
-	if (srv == 0) 
+	if (0 == srv) 
 	{
 		finfo->pool = pool;
 		finfo->fname = fname;

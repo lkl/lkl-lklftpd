@@ -32,7 +32,7 @@ apr_status_t lkl_dir_open(lkl_dir_t **new, const char *dirname,
 {
 	int dir = sys_open(dirname,O_RDONLY|O_DIRECTORY|O_LARGEFILE, 0);
 
-	if (dir<0)
+	if (dir < 0)
 		return APR_EINVAL;
 	(*new) = (lkl_dir_t *) apr_palloc(pool, sizeof(lkl_dir_t));
 	(*new)->pool = pool;
@@ -44,6 +44,7 @@ apr_status_t lkl_dir_open(lkl_dir_t **new, const char *dirname,
 	(*new)->data = (char*) apr_pcalloc(pool,BUF_SIZE); 
 	apr_pool_cleanup_register((*new)->pool, *new, dir_cleanup,
                           apr_pool_cleanup_null);
+	
 return APR_SUCCESS;
 }
 
@@ -74,7 +75,8 @@ apr_status_t lkl_dir_remove(const char *path, apr_pool_t *pool)
 #ifdef DIRENT_TYPE
 static apr_filetype_e filetype_from_dirent_type(int type)
 {
-	switch (type) {
+	switch (type) 
+	{
 		case DT_REG:
 			return APR_REG;
 		case DT_DIR:
@@ -107,13 +109,12 @@ struct dirent * lkl_readdir(lkl_dir_t *thedir)
 	{
 		/* We've emptied out our buffer.  Refill it.  */
 		int bytes = sys_getdents(thedir->fd, thedir->data, BUF_SIZE);
-		if(bytes<=0)
+		if(bytes <= 0)
 			return NULL;
 		thedir->size = bytes;
 		thedir->offset = 0;
 	}
-	de=(struct dirent*) ((char*) thedir->data+thedir->offset);
-	printf("%s\n",de->d_name);
+	de = (struct dirent*) ((char*) thedir->data+thedir->offset);
 	thedir->offset += de->d_reclen;
 	
 	return de;
@@ -126,28 +127,28 @@ apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, lkl_dir_t * t
 #ifdef DIRENT_TYPE
 	apr_filetype_e type;
 #endif
+	
     // We're about to call a non-thread-safe readdir() 
 	thedir->entry = lkl_readdir(thedir); 
-	if (thedir->entry == NULL) {
+	if (NULL == thedir->entry) 
 		ret = APR_ENOENT;
-	}
 	finfo->fname = NULL;
 
-	if (ret) {
+	if (ret) 
+	{
 		finfo->valid = 0;
 		return ret;
 	}
 
 #ifdef DIRENT_TYPE
 	type = filetype_from_dirent_type(thedir->entry->DIRENT_TYPE);
-	if (type != APR_UNKFILE) {
+	if (APR_UNKFILE != type) 
 		wanted &= ~APR_FINFO_TYPE;
-	}
 #endif
 #ifdef DIRENT_INODE
-	if (thedir->entry->DIRENT_INODE && thedir->entry->DIRENT_INODE != -1) {
+	if (thedir->entry->DIRENT_INODE && thedir->entry->DIRENT_INODE != -1) 
 		wanted &= ~APR_FINFO_INODE;
-	}
+	
 #endif
 
 	wanted &= ~APR_FINFO_NAME;
@@ -166,23 +167,27 @@ apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, lkl_dir_t * t
 		finfo->fname = NULL;
 	}
 
-	if (wanted && (ret == APR_SUCCESS || ret == APR_INCOMPLETE)) {
+	if (wanted && (APR_SUCCESS == ret || APR_INCOMPLETE == ret)) 
+	{
 		wanted &= ~finfo->valid;
 	}
-	else {
+	else 
+	{
         // We don't bail because we fail to stat, when we are only -required-
 	//	* to readdir... but the result will be APR_INCOMPLETE
 
 		finfo->pool = thedir->pool;
 		finfo->valid = 0;
 #ifdef DIRENT_TYPE
-		if (type != APR_UNKFILE) {
+		if (APR_UNKFILE != type) 
+		{
 			finfo->filetype = type;
 			finfo->valid |= APR_FINFO_TYPE;
 		}
 #endif
 #ifdef DIRENT_INODE
-		if (thedir->entry->DIRENT_INODE && thedir->entry->DIRENT_INODE != -1) {
+		if (thedir->entry->DIRENT_INODE && thedir->entry->DIRENT_INODE != -1)
+		{
 			finfo->inode = thedir->entry->DIRENT_INODE;
 			finfo->valid |= APR_FINFO_INODE;
 		}
