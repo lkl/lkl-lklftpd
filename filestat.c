@@ -8,7 +8,6 @@
 #include "fileops.h"
 
 
-
 apr_fileperms_t lkl_unix_mode2perms(mode_t mode)
 {
 	apr_fileperms_t perms = 0;

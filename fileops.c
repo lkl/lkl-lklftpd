@@ -16,9 +16,9 @@ apr_status_t lkl_file_flush_locked(lkl_file_t *thefile)
 		do 
 		{
 			written = sys_write(thefile->filedes, thefile->buffer, thefile->bufpos);
-		} while (-1 == written && errno == EINTR);
+		} while (written < 0);
 		if (written == -1) 
-			rv = errno;
+			rv = APR_EINVAL;
 		else 
 		{
 			thefile->filePtr += written;
@@ -32,7 +32,8 @@ apr_status_t lkl_file_flush(lkl_file_t *thefile)
 {
 	apr_status_t rv = APR_SUCCESS;
 
-	if (thefile->buffered) {
+	if (thefile->buffered) 
+	{
 		file_lock(thefile);
 		rv = lkl_file_flush_locked(thefile);
 		file_unlock(thefile);
