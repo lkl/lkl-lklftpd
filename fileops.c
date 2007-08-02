@@ -18,8 +18,8 @@ apr_status_t lkl_file_flush_locked(lkl_file_t *thefile)
 		{
 			written = sys_write(thefile->filedes, thefile->buffer, thefile->bufpos);
 		}
-		while (written < 0);
-		if (written == -1) 
+		while (written == -EINTR);
+		if (written < 0) 
 			rv = APR_EINVAL;
 		else 
 		{
@@ -64,17 +64,7 @@ static apr_status_t file_cleanup(lkl_file_t *file)
 	}
 	else
 		rv = -ret;
-	#ifndef WAITIO_USES_POLL
-	if (NULL != file->pollset) 
-	{
-		int pollset_rv = apr_pollset_destroy(file->pollset);
-		/* If the file close failed, return its error value,
-		* not apr_pollset_destroy()'s.
-		*/
-		if (rv == APR_SUCCESS)
-			rv = pollset_rv;
-	}
-	#endif /* !WAITIO_USES_POLL */
+
 	return rv;
 }
 
@@ -195,7 +185,7 @@ apr_status_t lkl_file_open(lkl_file_t **new, const char *fname,
 	#if APR_HAS_THREADS
 		if ((*new)->flags & APR_XTHREAD) 
 		{
-		(*new)->thlock = thlock;
+			(*new)->thlock = thlock;
 		}
 	#endif
 	}
@@ -210,12 +200,7 @@ apr_status_t lkl_file_open(lkl_file_t **new, const char *fname,
 	(*new)->bufpos = 0;
 	(*new)->dataRead = 0;
 	(*new)->direction = 0;
-	#ifndef WAITIO_USES_POLL
-	/* Start out with no pollset.  apr_wait_for_io_or_timeout() will
-	* initialize the pollset if needed.
-	*/
-	(*new)->pollset = NULL;
-	#endif
+	
 	if (!(flag & APR_FILE_NOCLEANUP)) 
 	{
 		apr_pool_cleanup_register((*new)->pool, (void *)(*new), 
@@ -286,11 +271,11 @@ static apr_status_t file_read_buffered(lkl_file_t *thefile, void *buf,
 			int bytesread = sys_read(thefile->filedes, thefile->buffer, APR_FILE_BUFSIZE);
 			if (bytesread == 0) 
 			{
-				thefile->eof_hit = TRUE;
+				thefile->eof_hit = 1;
 				rv = APR_EOF;
 				break;
 			}
-			else if (bytesread <0) 
+			else if (bytesread < 0) 
 			{
 				rv = -bytesread;
 				break;
@@ -377,7 +362,7 @@ apr_status_t lkl_file_read(lkl_file_t *thefile, void *buf,
 		*nbytes = bytes_read;
 		if (rv == 0) 
 		{
-			  thefile->eof_hit = TRUE;
+			  thefile->eof_hit = 1;
 			  return APR_EOF;
 		}
 		 if (rv > 0) 
@@ -456,7 +441,7 @@ apr_status_t lkl_file_write(lkl_file_t *thefile, const void *buf,
 					{
 						rv = sys_write(thefile->filedes, buf, *nbytes);
 					}
-					while (rv == (apr_size_t)-1 && errno == EINTR);
+					while (rv == -EINTR);
 					if ((rv == -EAGAIN || rv == -EWOULDBLOCK))
 					{
 						*nbytes /= 2; // yes, we'll loop if kernel lied
@@ -548,7 +533,7 @@ static apr_status_t setptr(lkl_file_t *thefile, apr_off_t pos )
 	else 
 	{
 		rv = sys_lseek(thefile->filedes, pos, SEEK_SET);
-		if (rv >=0)
+		if (rv >= 0)
 		{
 			thefile->bufpos = thefile->dataRead = 0;
 			thefile->filePtr = pos;
@@ -568,7 +553,7 @@ apr_status_t lkl_file_seek(lkl_file_t *thefile, apr_seek_where_t where, apr_off_
 	
 	if (thefile->buffered) 
 	{
-		int rc = EINVAL;
+		int rc = -EINVAL;
 		apr_finfo_t finfo;
 		
 		file_lock(thefile);
@@ -650,7 +635,7 @@ apr_status_t lkl_file_lock(lkl_file_t *thefile, int type)
 		ltype |= LOCK_NB;
 
 	/* keep trying if flock() gets interrupted (by a signal) */
-	while ((rc = sys_flock(thefile->filedes, ltype)) < 0 && errno == EINTR)
+	while ((rc = sys_flock(thefile->filedes, ltype)) == -EINTR)
 		continue;
 
 	if (rc < 0)
@@ -662,7 +647,7 @@ apr_status_t lkl_file_unlock(lkl_file_t *thefile)
 {
 	int rc;
 	
-	while ((rc = sys_flock(thefile->filedes, LOCK_UN)) < 0 && errno == EINTR)
+	while ((rc = sys_flock(thefile->filedes, LOCK_UN)) == -EINTR)
 		continue;
 
 	if (rc < 0)

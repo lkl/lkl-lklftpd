@@ -82,10 +82,7 @@ struct lkl_file_t
 	int buffered;
 	enum {BLK_UNKNOWN, BLK_OFF, BLK_ON } blocking;
 	int ungetchar;    /* Last char provided by an unget op. (-1 = no char)*/
-#ifndef WAITIO_USES_POLL
-	/* if there is a timeout set, then this pollset is used */
-	apr_pollset_t *pollset;
-#endif
+
 	/* Stuff for buffered mode */
 	char *buffer;
 	int bufpos;               /* Read/Write position in buffer */
