@@ -2,6 +2,7 @@
 #ifdef LKL_FILE_APIS
 
 #include "fileops.h"
+#include <linux/poll.h>
 
 #define APR_FILE_BUFSIZE 4096
 
@@ -16,7 +17,8 @@ apr_status_t lkl_file_flush_locked(lkl_file_t *thefile)
 		do 
 		{
 			written = sys_write(thefile->filedes, thefile->buffer, thefile->bufpos);
-		} while (written < 0);
+		}
+		while (written < 0);
 		if (written == -1) 
 			rv = APR_EINVAL;
 		else 
@@ -229,27 +231,299 @@ apr_status_t lkl_file_close(lkl_file_t *file)
 	 return apr_pool_cleanup_run(file->pool, file, lkl_unix_file_cleanup);
 }
 
+static apr_status_t lkl_wait_for_io_or_timeout(lkl_file_t *f, int for_read)
+{
+	struct pollfd pfd;
+	int rc, timeout;
+
+	timeout    = f->timeout / 1000;
+	pfd.fd     = f->filedes;
+	pfd.events = for_read ? POLLIN : POLLOUT;
+
+	do 
+	{
+		rc = sys_poll(&pfd, 1, timeout);
+	} 
+	while (rc == -EINTR);
+	if (!rc) 
+		return APR_TIMEUP;
+	else if (rc > 0) 
+		return APR_SUCCESS;
+	
+	return -rc;
+}
+
+static apr_status_t file_read_buffered(lkl_file_t *thefile, void *buf,
+				       apr_size_t *nbytes)
+{
+	apr_ssize_t rv;
+	char *pos = (char *)buf;
+	apr_uint64_t blocksize;
+	apr_uint64_t size = *nbytes;
+
+	if (thefile->direction == 1) 
+	{
+		rv = lkl_file_flush_locked(thefile);
+		if (rv) 
+			return rv;
+		thefile->bufpos = 0;
+		thefile->direction = 0;
+		thefile->dataRead = 0;
+	}
+
+	rv = 0;
+	if (thefile->ungetchar != -1) 
+	{
+		*pos = (char)thefile->ungetchar;
+		++pos;
+		--size;
+		thefile->ungetchar = -1;
+	}
+	while (rv == 0 && size > 0) 
+	{
+		if (thefile->bufpos >= thefile->dataRead) 
+		{
+			int bytesread = sys_read(thefile->filedes, thefile->buffer, APR_FILE_BUFSIZE);
+			if (bytesread == 0) 
+			{
+				thefile->eof_hit = TRUE;
+				rv = APR_EOF;
+				break;
+			}
+			else if (bytesread <0) 
+			{
+				rv = -bytesread;
+				break;
+			}
+			thefile->dataRead = bytesread;
+			thefile->filePtr += thefile->dataRead;
+			thefile->bufpos = 0;
+		}
+
+		blocksize = size > thefile->dataRead - thefile->bufpos ? thefile->dataRead - thefile->bufpos : size;
+		memcpy(pos, thefile->buffer + thefile->bufpos, blocksize);
+		thefile->bufpos += blocksize;
+		pos += blocksize;
+		size -= blocksize;
+	}
+
+	*nbytes = pos - (char *)buf;
+	if (*nbytes) 
+		rv = 0;
+	
+	return rv;
+}
+
 apr_status_t lkl_file_read(lkl_file_t *thefile, void *buf,
 			   apr_size_t *nbytes)
 {
-	//TODO
-	return APR_SUCCESS;
+	apr_ssize_t rv;
+	apr_size_t bytes_read;
+
+	if (*nbytes <= 0) 
+	{
+		*nbytes = 0;
+		return APR_SUCCESS;
+	}
+
+	if (thefile->buffered) {
+		file_lock(thefile);
+		rv = file_read_buffered(thefile, buf, nbytes);
+		file_unlock(thefile);
+
+		return rv;
+	}
+	else 
+	{
+		bytes_read = 0;
+		if (thefile->ungetchar != -1) 
+		{
+			bytes_read = 1;
+			*(char *)buf = (char)thefile->ungetchar;
+			buf = (char *)buf + 1;
+			(*nbytes)--;
+			thefile->ungetchar = -1;
+			if (*nbytes == 0) 
+			{
+				*nbytes = bytes_read;
+				return APR_SUCCESS;
+			}
+		}
+
+		do 
+		{
+			rv = sys_read(thefile->filedes, buf, *nbytes);
+		}
+		while (rv == -EINTR);
+// WAIT FOR IO
+		if ((rv == -EAGAIN || rv == -EWOULDBLOCK) && thefile->timeout != 0) 
+		{
+			apr_status_t arv = lkl_wait_for_io_or_timeout(thefile, 1);
+			if (arv != APR_SUCCESS) 
+			{
+				*nbytes = bytes_read;
+				return arv;
+			}
+			else 
+			{
+				do 
+				{
+					rv = sys_read(thefile->filedes, buf, *nbytes);
+				} 
+				while (rv == -EINTR);
+			}
+		}  
+
+		*nbytes = bytes_read;
+		if (rv == 0) 
+		{
+			  thefile->eof_hit = TRUE;
+			  return APR_EOF;
+		}
+		 if (rv > 0) 
+		 {
+			 *nbytes += rv;
+		 	return APR_SUCCESS;
+		}
+		return rv;
+	}
 }
 
 apr_status_t lkl_file_write(lkl_file_t *thefile, const void *buf,
 			    apr_size_t *nbytes)
 {
-	//TODO
+	apr_size_t rv;
+
+	if (thefile->buffered) 
+	{
+		char *pos = (char *)buf;
+		int blocksize;
+		int size = *nbytes;
+
+		file_lock(thefile);
+
+		if ( thefile->direction == 0 ) 
+		{
+            // Position file pointer for writing at the offset we are 
+		// logically reading from
+	    //
+			apr_int64_t offset = thefile->filePtr - thefile->dataRead + thefile->bufpos;
+			if (offset != thefile->filePtr)
+				sys_lseek(thefile->filedes, offset, SEEK_SET);
+			thefile->bufpos = thefile->dataRead = 0;
+			thefile->direction = 1;
+		}
+
+		rv = 0;
+		while (rv == 0 && size > 0) 
+		{
+			if (thefile->bufpos == APR_FILE_BUFSIZE)   // write buffer is full
+				rv = lkl_file_flush_locked(thefile);
+
+			blocksize = size > APR_FILE_BUFSIZE - thefile->bufpos ? 
+					APR_FILE_BUFSIZE - thefile->bufpos : size;
+			memcpy(thefile->buffer + thefile->bufpos, pos, blocksize);
+			thefile->bufpos += blocksize;
+			pos += blocksize;
+			size -= blocksize;
+		}
+
+		file_unlock(thefile);
+
+		return rv;
+	}
+	else 
+	{
+		do 
+		{
+			rv = sys_write(thefile->filedes, buf, *nbytes);
+		} 
+		while (rv == -EINTR);
+// USE WAIT FOR IO
+		if ( (rv == -EAGAIN || rv == -EWOULDBLOCK) && thefile->timeout != 0) 
+		{
+			apr_status_t arv = lkl_wait_for_io_or_timeout(thefile, 0);
+			if (arv != APR_SUCCESS) 
+			{
+				*nbytes = 0;
+				return arv;
+			}
+			else 
+			{
+				do 
+				{
+					do 
+					{
+						rv = sys_write(thefile->filedes, buf, *nbytes);
+					}
+					while (rv == (apr_size_t)-1 && errno == EINTR);
+					if ((rv == -EAGAIN || rv == -EWOULDBLOCK))
+					{
+						*nbytes /= 2; // yes, we'll loop if kernel lied
+						// and we can't even write 1 byte
+					}
+					else 
+					{
+						break;
+					}
+				}
+				while (1);
+			}
+		}  
+		if (rv < 0)
+		{
+			(*nbytes) = 0;
+			return -rv;
+		}
+		*nbytes = rv;
+	}
 	return APR_SUCCESS;
 }
 
-apr_status_t lkl_file_write_full(lkl_file_t *thefile,
-				 const void *buf,
-     apr_size_t nbytes,
-     apr_size_t *bytes_written)
+apr_status_t lkl_file_read_full(lkl_file_t *thefile, void *buf,
+				 apr_size_t nbytes, apr_size_t *bytes_read)
 {
-	//TODO
-	return APR_SUCCESS;
+	apr_status_t status;
+	apr_size_t total_read = 0;
+
+	do 
+	{
+		apr_size_t amt = nbytes;
+
+		status = lkl_file_read(thefile, buf, &amt);
+		buf = (char *)buf + amt;
+		nbytes -= amt;
+		total_read += amt;
+	} 
+	while (status == APR_SUCCESS && nbytes > 0);
+
+	if (bytes_read != NULL)
+		*bytes_read = total_read;
+
+	return status;
+}
+
+apr_status_t lkl_file_write_full(lkl_file_t *thefile, const void *buf,
+				apr_size_t nbytes, apr_size_t *bytes_written)
+{
+	apr_status_t status;
+	apr_size_t total_written = 0;
+
+	do
+	{
+		apr_size_t amt = nbytes;
+
+		status = lkl_file_write(thefile, buf, &amt);
+		buf = (char *)buf + amt;
+		nbytes -= amt;
+		total_written += amt;
+	} 
+	while (status == APR_SUCCESS && nbytes > 0);
+
+	if (bytes_written != NULL)
+		*bytes_written = total_written;
+
+	return status;
 }
 
 static apr_status_t setptr(lkl_file_t *thefile, apr_off_t pos )
@@ -325,7 +599,7 @@ apr_status_t lkl_file_seek(lkl_file_t *thefile, apr_seek_where_t where, apr_off_
 	else 
 	{
 		rv = sys_lseek(thefile->filedes, *offset, where);
-		if (rv <0) 
+		if (rv < 0) 
 		{
 			*offset = -1;
 			return -rv;
@@ -379,7 +653,7 @@ apr_status_t lkl_file_lock(lkl_file_t *thefile, int type)
 	while ((rc = sys_flock(thefile->filedes, ltype)) < 0 && errno == EINTR)
 		continue;
 
-	if (rc <0)
+	if (rc < 0)
 		return -rc;
 	return APR_SUCCESS;
 }
@@ -391,7 +665,7 @@ apr_status_t lkl_file_unlock(lkl_file_t *thefile)
 	while ((rc = sys_flock(thefile->filedes, LOCK_UN)) < 0 && errno == EINTR)
 		continue;
 
-	if (rc <0)
+	if (rc < 0)
 		return -rc;
 	return APR_SUCCESS;
 }
