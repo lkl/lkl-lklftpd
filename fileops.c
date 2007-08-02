@@ -1,111 +1,9 @@
 //here we implement the lkl-based file wrappers.
 #ifdef LKL_FILE_APIS
 
-#define __KERNEL__
-
-#include <linux/stat.h>
-#include <asm/stat.h>
-
 #include "fileops.h"
-#include <apr_poll.h>
-#include <apr_strings.h>
 
 #define APR_FILE_BUFSIZE 4096
-
-struct lkl_file_t 
-{
-	apr_pool_t *pool;
-	int filedes;
-	char *fname;
-	apr_int32_t flags;
-	int eof_hit;
-	int is_pipe;
-	apr_interval_time_t timeout;
-	int buffered;
-	enum {BLK_UNKNOWN, BLK_OFF, BLK_ON } blocking;
-	int ungetchar;    /* Last char provided by an unget op. (-1 = no char)*/
-#ifndef WAITIO_USES_POLL
-	/* if there is a timeout set, then this pollset is used */
-	apr_pollset_t *pollset;
-#endif
-	/* Stuff for buffered mode */
-	char *buffer;
-	int bufpos;               /* Read/Write position in buffer */
-	unsigned long dataRead;   /* amount of valid data read into buffer */
-	int direction;            /* buffer being used for 0 = read, 1 = write */
-	apr_off_t filePtr;        /* position in file of handle */
-#if APR_HAS_THREADS
-	struct apr_thread_mutex_t *thlock;
-#endif
-};
-
-apr_fileperms_t lkl_unix_mode2perms(mode_t mode)
-{
-	apr_fileperms_t perms = 0;
-
-	if (mode & S_ISUID)
-		perms |= APR_USETID;
-	if (mode & S_IRUSR)
-		perms |= APR_UREAD;
-	if (mode & S_IWUSR)
-		perms |= APR_UWRITE;
-	if (mode & S_IXUSR)
-		perms |= APR_UEXECUTE;
-	if (mode & S_ISGID)
-		perms |= APR_GSETID;
-	if (mode & S_IRGRP)
-		perms |= APR_GREAD;
-	if (mode & S_IWGRP)
-		perms |= APR_GWRITE;
-	if (mode & S_IXGRP)
-		perms |= APR_GEXECUTE;
-#ifdef S_ISVTX
-	if (mode & S_ISVTX)
-		perms |= APR_WSTICKY;
-#endif
-	if (mode & S_IROTH)
-		perms |= APR_WREAD;
-	if (mode & S_IWOTH)
-		perms |= APR_WWRITE;
-	if (mode & S_IXOTH)
-		perms |= APR_WEXECUTE;
-	
-	return perms;
-} 
-
-mode_t lkl_unix_perms2mode(apr_fileperms_t perms)
-{
-	mode_t mode = 0;
-
-	if (perms & APR_USETID)
-		mode |= S_ISUID;
-	if (perms & APR_UREAD)
-		mode |= S_IRUSR;
-	if (perms & APR_UWRITE)
-		mode |= S_IWUSR;
-	if (perms & APR_UEXECUTE)
-		mode |= S_IXUSR;
-	if (perms & APR_GSETID)
-		mode |= S_ISGID;
-	if (perms & APR_GREAD)
-		mode |= S_IRGRP;
-	if (perms & APR_GWRITE)
-		mode |= S_IWGRP;
-	if (perms & APR_GEXECUTE)
-		mode |= S_IXGRP;
-#ifdef S_ISVTX
-	if (perms & APR_WSTICKY)
-		mode |= S_ISVTX;
-#endif
-	if (perms & APR_WREAD)
-		mode |= S_IROTH;
-	if (perms & APR_WWRITE)
-		mode |= S_IWOTH;
-	if (perms & APR_WEXECUTE)
-		mode |= S_IXOTH;
-
-	return mode;
-}
 
 apr_status_t lkl_file_flush_locked(lkl_file_t *thefile)
 {
@@ -125,7 +23,6 @@ apr_status_t lkl_file_flush_locked(lkl_file_t *thefile)
 		{
 			thefile->filePtr += written;
 			thefile->bufpos = 0;
-		
 		}
 	}
 	return rv;
@@ -134,11 +31,11 @@ apr_status_t lkl_file_flush_locked(lkl_file_t *thefile)
 apr_status_t lkl_file_flush(lkl_file_t *thefile)
 {
 	apr_status_t rv = APR_SUCCESS;
-	//TODO	
+
 	if (thefile->buffered) {
-	//	file_lock(thefile);
+		file_lock(thefile);
 		rv = lkl_file_flush_locked(thefile);
-	//	file_unlock(thefile);
+		file_unlock(thefile);
 	}
 	/* There isn't anything to do if we aren't buffering the output
 	* so just return success.
@@ -331,12 +228,122 @@ apr_status_t lkl_file_close(lkl_file_t *file)
 	 return apr_pool_cleanup_run(file->pool, file, lkl_unix_file_cleanup);
 }
 
-APR_DECLARE(apr_status_t) lkl_file_eof(lkl_file_t *fptr)
+apr_status_t lkl_file_read(lkl_file_t *thefile, void *buf,
+			   apr_size_t *nbytes)
+{
+	//TODO
+	return APR_SUCCESS;
+}
+
+apr_status_t lkl_file_write(lkl_file_t *thefile, const void *buf,
+			    apr_size_t *nbytes)
+{
+	//TODO
+	return APR_SUCCESS;
+}
+
+apr_status_t lkl_file_write_full(lkl_file_t *thefile,
+				 const void *buf,
+     apr_size_t nbytes,
+     apr_size_t *bytes_written)
+{
+	//TODO
+	return APR_SUCCESS;
+}
+
+static apr_status_t setptr(lkl_file_t *thefile, apr_off_t pos )
+{
+	apr_off_t newbufpos;
+	apr_status_t rv;
+	
+	if (thefile->direction == 1) 
+	{
+		rv = lkl_file_flush_locked(thefile);
+		if (rv)
+			return rv;
+		thefile->bufpos = thefile->direction = thefile->dataRead = 0;
+	}
+	
+	newbufpos = pos - (thefile->filePtr - thefile->dataRead);
+	if (newbufpos >= 0 && newbufpos <= thefile->dataRead) 
+	{
+		thefile->bufpos = newbufpos;
+		rv = APR_SUCCESS;
+	} 
+	else 
+	{
+		rv = sys_lseek(thefile->filedes, pos, SEEK_SET);
+		if (rv >=0)
+		{
+			thefile->bufpos = thefile->dataRead = 0;
+			thefile->filePtr = pos;
+			rv = APR_SUCCESS;
+		}
+	}
+	
+	return -rv;
+}
+
+
+apr_status_t lkl_file_seek(lkl_file_t *thefile, apr_seek_where_t where, apr_off_t *offset)
+{
+	apr_off_t rv;
+	
+	thefile->eof_hit = 0;
+	
+	if (thefile->buffered) 
+	{
+		int rc = EINVAL;
+		apr_finfo_t finfo;
+		
+		file_lock(thefile);
+		
+		switch (where) 
+		{
+		case APR_SET:
+			rc = setptr(thefile, *offset);
+			break;
+		
+		case APR_CUR:
+			rc = setptr(thefile, thefile->filePtr - thefile->dataRead + thefile->bufpos + *offset);
+			break;
+		
+		case APR_END:
+			rc = lkl_file_info_get_locked(&finfo, APR_FINFO_SIZE, thefile);
+			if (rc == APR_SUCCESS)
+			rc = setptr(thefile, finfo.size + *offset);
+			break;
+		}
+	
+		*offset = thefile->filePtr - thefile->dataRead + thefile->bufpos;
+		
+		file_unlock(thefile);
+		
+		return rc;
+	}
+	else 
+	{
+		rv = sys_lseek(thefile->filedes, *offset, where);
+		if (rv <0) 
+		{
+			*offset = -1;
+			return -rv;
+		}
+		else 
+		{
+			*offset = rv;
+			return APR_SUCCESS;
+		}
+	}
+}
+
+apr_status_t lkl_file_eof(lkl_file_t *fptr)
 {
 	if (fptr->eof_hit == 1) 
 		return APR_EOF;
 	return APR_SUCCESS;
 }   
+
 
 apr_status_t lkl_file_remove(const char *path, apr_pool_t *pool)
 {
@@ -355,149 +362,37 @@ apr_status_t lkl_file_rename(const char *from_path, const char *to_path,
 	return -ret;
 }
 
-apr_status_t lkl_file_read(lkl_file_t *thefile, void *buf,
-			   apr_size_t *nbytes)
+apr_status_t lkl_file_lock(lkl_file_t *thefile, int type)
 {
-	return APR_SUCCESS;
-}
+	int rc;
+	int ltype;
 
-apr_status_t lkl_file_write(lkl_file_t *thefile, const void *buf,
-			    apr_size_t *nbytes)
-{
-	return APR_SUCCESS;
-}
-
-apr_status_t lkl_file_write_full(lkl_file_t *thefile,
-				 const void *buf,
-				apr_size_t nbytes,
-				apr_size_t *bytes_written)
-{
-	return APR_SUCCESS;
-}
-
-apr_status_t lkl_file_seek(lkl_file_t *thefile, apr_seek_where_t where, apr_off_t *offset)
-{
-	return APR_SUCCESS;
-}
-
-
-
-
-static apr_filetype_e filetype_from_mode(mode_t mode)
-{
-	apr_filetype_e type;
-	switch (mode & S_IFMT) {
-		case S_IFREG:
-			type = APR_REG; break;
-		case S_IFDIR:
-			type = APR_DIR; break;
-		case S_IFLNK:
-			type = APR_LNK; break;
-		case S_IFCHR:
-			type = APR_CHR; break;
-		case S_IFBLK:
-			type = APR_BLK; break;
-#if defined(S_IFFIFO)
-		case S_IFFIFO:
-			type = APR_PIPE; break;
-#endif
-#if !defined(BEOS) && defined(S_IFSOCK)
-		case S_IFSOCK:
-			type = APR_SOCK; break;
-#endif
-	default:
-#if !defined(S_IFFIFO) && defined(S_ISFIFO)
-			if (S_ISFIFO(mode)) {
-				type = APR_PIPE;
-			} else
-#endif
-#if !defined(BEOS) && !defined(S_IFSOCK) && defined(S_ISSOCK)
-				if (S_ISSOCK(mode)) {
-					type = APR_SOCK;
-				} else
-#endif
-					type = APR_UNKFILE;
-	}
-	
-	return type;
-}
-
-static void fill_out_finfo(apr_finfo_t *finfo, struct stat *info,apr_int32_t wanted)
-{
-	finfo->valid = APR_FINFO_MIN | APR_FINFO_IDENT | APR_FINFO_NLINK
-			| APR_FINFO_OWNER | APR_FINFO_PROT;
-	finfo->protection = lkl_unix_mode2perms(info->st_mode);
-	finfo->filetype = filetype_from_mode(info->st_mode);
-	finfo->user = info->st_uid;
-	finfo->group = info->st_gid;
-	finfo->size = info->st_size;
-	finfo->inode = info->st_ino;
-	finfo->device = info->st_dev;
-	finfo->nlink = info->st_nlink;
-	apr_time_ansi_put(&finfo->atime, info->st_atime);
-	apr_time_ansi_put(&finfo->mtime, info->st_mtime);
-	apr_time_ansi_put(&finfo->ctime, info->st_ctime);
-	
-}
-
-apr_status_t lkl_file_info_get(apr_finfo_t *finfo, apr_int32_t wanted, lkl_file_t *thefile)
-{
-	struct stat info;
-	int ret;
-
-	if (thefile->buffered) 
-	{
-		apr_status_t rv = lkl_file_flush(thefile);
-		if (rv != APR_SUCCESS)
-		return rv;
-	}
-	ret = sys_newfstat(thefile->filedes, &info);
-	if (0 == ret) 
-	{
-		finfo->pool = thefile->pool;
-		finfo->fname = thefile->fname;
-		fill_out_finfo(finfo, &info, wanted);
-		return (wanted & ~finfo->valid) ? APR_INCOMPLETE : APR_SUCCESS;
-	}
-	return -ret;
-}
-
-apr_status_t lkl_stat(apr_finfo_t *finfo,const char *fname, apr_int32_t wanted, apr_pool_t *pool)
-{
-	struct stat info;
-	int srv =0;
-	
-	memset(&info,0,sizeof(struct stat));
-	if (wanted & APR_FINFO_LINK)
-		srv = sys_newlstat(fname, &info);
+	if ((type & APR_FLOCK_TYPEMASK) == APR_FLOCK_SHARED)
+		ltype = LOCK_SH;
 	else
-		srv = sys_newstat(fname, &info);
+		ltype = LOCK_EX;
+	if ((type & APR_FLOCK_NONBLOCK) != 0)
+		ltype |= LOCK_NB;
+
+	/* keep trying if flock() gets interrupted (by a signal) */
+	while ((rc = sys_flock(thefile->filedes, ltype)) < 0 && errno == EINTR)
+		continue;
+
+	if (rc <0)
+		return -rc;
+	return APR_SUCCESS;
+}
+
+apr_status_t lkl_file_unlock(lkl_file_t *thefile)
+{
+	int rc;
 	
-	if (0 == srv) 
-	{
-		finfo->pool = pool;
-		finfo->fname = fname;
-		fill_out_finfo(finfo, &info, wanted);
-		if (wanted & APR_FINFO_LINK)
-			wanted &= ~APR_FINFO_LINK;
-		return (wanted & ~finfo->valid) ? APR_INCOMPLETE : APR_SUCCESS;
-	}
-/*	else 
-	{
-#if !defined(ENOENT) || !defined(ENOTDIR)
-#if !defined(ENOENT)
-	return APR_ENOENT;
-#else
-	if ((-srv) != ENOENT)
-		return APR_ENOENT;
-	else
-		return -srv;
-#endif
-#else
-	return -srv;
-#endif
-	} */
-	return -srv;
-} 
+	while ((rc = sys_flock(thefile->filedes, LOCK_UN)) < 0 && errno == EINTR)
+		continue;
+
+	if (rc <0)
+		return -rc;
+	return APR_SUCCESS;
+}
 
 #endif

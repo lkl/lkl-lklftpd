@@ -1,4 +1,4 @@
-DEPS=listen.o main.o worker.o utils.o config.o cmdio.o cmdhandler.o sess.o fileops.o dirops.o lkl_thread.o
+DEPS=listen.o main.o worker.o utils.o config.o cmdio.o cmdhandler.o sess.o fileops.o filestat.o dirops.o lkl_thread.o
 
 DEFINE_PREFIX=-D
 INCLUDE_PREFIX=-I

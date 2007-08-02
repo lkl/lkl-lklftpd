@@ -1,21 +1,8 @@
 #ifdef LKL_FILE_APIS
 
-#include <apr_strings.h>
-
 #include "fileops.h"
 
 #define BUF_SIZE 4096
-
-struct lkl_dir_t 
-{
-	apr_pool_t *pool;
-	char * dirname; // dir name
-	int fd; // file descriptor
-	char * data; // dir block
-	int offset; // current offset
-	int size; // total valid data
-	struct dirent *entry; // current entry
-};
 
 
 static apr_status_t dir_cleanup(void *thedir)

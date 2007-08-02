@@ -59,6 +59,8 @@
 #include <apr_file_info.h>
 #include <apr_inherit.h>
 #include <apr_file_io.h>
+#include <apr_poll.h>
+#include <apr_strings.h>
 
 #include <linux/fcntl.h>
 #include <linux/types.h>
@@ -68,15 +70,67 @@
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
-struct lkl_file_t;
+struct lkl_file_t
+{
+	apr_pool_t *pool;
+	int filedes;
+	char *fname;
+	apr_int32_t flags;
+	int eof_hit;
+	int is_pipe;
+	apr_interval_time_t timeout;
+	int buffered;
+	enum {BLK_UNKNOWN, BLK_OFF, BLK_ON } blocking;
+	int ungetchar;    /* Last char provided by an unget op. (-1 = no char)*/
+#ifndef WAITIO_USES_POLL
+	/* if there is a timeout set, then this pollset is used */
+	apr_pollset_t *pollset;
+#endif
+	/* Stuff for buffered mode */
+	char *buffer;
+	int bufpos;               /* Read/Write position in buffer */
+	unsigned long dataRead;   /* amount of valid data read into buffer */
+	int direction;            /* buffer being used for 0 = read, 1 = write */
+	apr_off_t filePtr;        /* position in file of handle */
+#if APR_HAS_THREADS
+	struct apr_thread_mutex_t *thlock;
+#endif
+};
+
 typedef struct lkl_file_t lkl_file_t;
 
-struct lkl_dir_t;
+struct lkl_dir_t
+{
+	apr_pool_t *pool;
+	char * dirname; // dir name
+	int fd; // file descriptor
+	char * data; // dir block
+	int offset; // current offset
+	int size; // total valid data
+	struct dirent *entry; // current entry
+};
 typedef struct lkl_dir_t lkl_dir_t;
 
+#if APR_HAS_THREADS
+#define file_lock(f)   do { \
+                           if ((f)->thlock) \
+                               apr_thread_mutex_lock((f)->thlock); \
+                       } while (0)
+#define file_unlock(f) do { \
+                           if ((f)->thlock) \
+                               apr_thread_mutex_unlock((f)->thlock); \
+                       } while (0)
+#else
+#define file_lock(f)   do {} while (0)
+#define file_unlock(f) do {} while (0)
+#endif
 
 apr_fileperms_t lkl_unix_mode2perms(mode_t mode);
 mode_t lkl_unix_perms2mode(apr_fileperms_t perms);
+apr_status_t lkl_file_flush_locked(lkl_file_t *thefile);
+apr_status_t lkl_file_info_get_locked(apr_finfo_t *finfo, apr_int32_t wanted,
+                                      lkl_file_t *thefile);
+
 
 apr_status_t lkl_file_open(lkl_file_t **newf, const char *fname,
                                         apr_int32_t flag, apr_fileperms_t perm,
