@@ -13,6 +13,9 @@
 //TODO: rename and move to apppropriate place
 #define VSFTP_DATA_BUFSIZE      65536
 
+static void port_cleanup(struct lfd_sess* p_sess);
+static void pasv_cleanup(struct lfd_sess* p_sess);
+
 int handle_user_cmd(struct lfd_sess* p_sess)
 {
 	//TODO: this is a hardcoded value! we need to check the user of the system!
@@ -30,6 +33,34 @@ int handle_pass_cmd(struct lfd_sess* p_sess)
 
 apr_status_t handle_passive(struct lfd_sess * sess)
 {
+	apr_status_t	  rc;
+	apr_socket_t	* listen_fd;
+	apr_sockaddr_t	* saddr;
+
+	port_cleanup(sess);
+	pasv_cleanup(sess);
+
+	rc = apr_sockaddr_info_get(&saddr, NULL, APR_UNSPEC, lfd_config_data_port, 0, sess->loop_pool);
+	if(APR_SUCCESS != rc)
+	{
+		return rc;
+	}
+	rc = apr_socket_create(&listen_fd, saddr->family, APR_UNSPEC, APR_PROTO_TCP, sess->sess_pool);
+	if(APR_SUCCESS != rc)
+	{
+		return rc;
+	}
+	rc = apr_socket_opt_set(listen_fd, APR_SO_REUSEADDR, 1);
+	if(APR_SUCCESS != rc)
+	{
+		return rc;
+	}
+	rc = apr_socket_bind(listen_fd, saddr);
+	if(APR_SUCCESS != rc)
+	{
+		return rc;
+	}
+	sess->pasv_listen_fd = listen_fd;
 	//TODO:implement
 	return APR_SUCCESS;
 }
@@ -338,9 +369,7 @@ apr_status_t handle_type(struct lfd_sess *sess)
 /**
  *@brief parses a string of delimited numbers between 0 and 255 and stores them in the p_items buffer
  */
-const unsigned char * lkl_str_parse_uchar_string_sep(
-		char * input_str, char sep, unsigned char* p_items,
-  unsigned int items)
+const unsigned char * lkl_str_parse_uchar_string_sep(char * input_str, char sep, unsigned char* p_items, unsigned int items)
 {
 	char * last, * str;
 	unsigned int i;
@@ -547,6 +576,44 @@ static apr_status_t get_bound_and_connected_ftp_port_sock(struct lfd_sess* p_ses
 	return APR_SUCCESS;
 }
 
+/**
+ * @brief Get a connected socket to the client's listening data port.
+ * Also binds the local end of the socket to a configurable (default 20) data port.
+ */
+static apr_status_t get_bound_and_connected_ftp_pasv_sock(struct lfd_sess* p_sess, apr_socket_t ** psock)
+{
+// 	apr_socket_t	* sock;
+// 	apr_sockaddr_t	* saddr;
+// 	apr_status_t	  rc;
+//
+// 	*psock = NULL;
+//
+// 	rc = apr_socket_listen(p_sess->pasv_listen_fd, 1); //backlog of one!
+// 	rc = apr_socket_connect (sock, p_sess->p_port_sockaddr);
+// 	if(APR_SUCCESS != rc)
+// 		return rc;
+//
+// 	*psock = sock;
+	return APR_SUCCESS;
+}
+
+static apr_status_t lfd_ftpdataio_get_pasv_fd(struct lfd_sess* p_sess, apr_socket_t ** psock)
+{
+	apr_status_t	  rc;
+	apr_socket_t	* remote_fd;
+	*psock = NULL;
+	rc = get_bound_and_connected_ftp_pasv_sock(p_sess, &remote_fd);
+	if (APR_SUCCESS != rc)
+	{
+		lfd_cmdio_write(p_sess, FTP_BADSENDCONN, "Failed to establish connection.");
+		lfd_log(LFD_ERROR, "get_bound_and_connected_ftp_port_sock failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(p_sess, rc));
+		return rc;
+	}
+
+	init_data_sock_params(p_sess, remote_fd);
+	*psock = remote_fd;
+	return APR_SUCCESS;
+}
 
 static apr_status_t ftpdataio_get_port_fd(struct lfd_sess* p_sess, apr_socket_t ** psock)
 {
@@ -581,7 +648,7 @@ static apr_socket_t* get_remote_transfer_fd(struct lfd_sess* p_sess, const char*
 	p_sess->data_conn->abor_received = 0;
 	if (pasv_active(p_sess))
 	{
-		//remote_fd = lfd_ftpdataio_get_pasv_fd(p_sess);
+		lfd_ftpdataio_get_pasv_fd(p_sess, &remote_fd);
 	}
 	else
 	{

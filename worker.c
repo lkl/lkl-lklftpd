@@ -32,7 +32,7 @@ static void init_username_related_fields(struct lfd_sess * sess)
 {
 	sess->user = apr_pstrdup(sess->sess_pool, sess->user);
 	sess->home_str = apr_pstrcat(sess->sess_pool, "/home/", sess->user, "/", NULL);
-	sess->rel_path = apr_pstrdup(sess->sess_pool, sess->home_str);
+	sess->rel_path = "/";
 }
 
 static apr_status_t get_username_password(struct lfd_sess* p_sess)
@@ -127,7 +127,7 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 			continue;
 		}
 
-		if(lfd_cmdio_cmd_equals(sess, "PASIVE"))
+		if(lfd_cmdio_cmd_equals(sess, "PASV"))
 		{
 			rc = handle_passive(sess);
 		}
