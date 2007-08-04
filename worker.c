@@ -1,6 +1,7 @@
 // main FTP protocol loop handling
 #include <string.h>
 
+#include <apr.h>
 #include <apr_network_io.h>
 #include <apr_errno.h>
 #include <apr_strings.h>
@@ -12,7 +13,7 @@
 #include "cmdhandler.h"
 #include "sess.h"
 
-
+extern volatile apr_uint32_t ftp_must_exit;
 static apr_status_t emit_greeting(struct lfd_sess * p_sess)
 {
 	apr_status_t rc = APR_SUCCESS;
@@ -86,12 +87,14 @@ static apr_status_t get_username_password(struct lfd_sess* p_sess)
 	return APR_SUCCESS;
 }
 
+
+
 static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 {
 	apr_status_t rc = APR_SUCCESS;
-	int rnfrto; // "rename from" and "rename to" should go togheter 
+	int rnfrto; // "rename from" and "rename to" should go togheter
 	char * temp_name;
-	
+
 	temp_name = NULL;
 	rnfrto = 0;
 	while(APR_SUCCESS == rc)
@@ -118,7 +121,7 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 			rc = handle_bad_rnto(sess);
 			continue;
 		}
-		
+
 		if(lfd_cmdio_cmd_equals(sess, "PASIVE"))
 		{
 			rc = handle_passive(sess);
@@ -197,6 +200,11 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		else if(lfd_cmdio_cmd_equals(sess, "APPE"))
 		{
 			rc = handle_appe(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "KILL"))//This is an extension hack
+		{
+			apr_atomic_set32(&ftp_must_exit, 1);
+			return APR_SUCCESS;
 		}
 		else //default
 		{

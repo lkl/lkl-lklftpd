@@ -15,6 +15,7 @@ void ftpd_main(void);
 
 #ifdef LKL_FILE_APIS
 
+#include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <malloc.h>
@@ -96,7 +97,7 @@ int _sbull_open(void)
 {
 	int fd;
         fd=open("disk", O_RDWR);
-	
+
 	return fd;
 }
 
@@ -115,7 +116,7 @@ unsigned long _sbull_sectors(void)
 void _sbull_transfer(int fd, unsigned long sector, unsigned long nsect, char *buffer, int dir)
 {
 	  assert(lseek64(fd, sector*512, SEEK_SET) >= 0);
-        
+
         if (dir)
                 assert(write(fd, buffer, nsect*512) == nsect*512);
         else
@@ -140,23 +141,35 @@ int kernel_execve(const char *filename, char *const argv[], char *const envp[])
 
 #endif
 
-        if (strcmp(filename, "/bin/init") == 0) 
+        if (strcmp(filename, "/bin/init") == 0)
 	{
-		//int err;
+		int err = 0;
 		// remount the file system with write access
-		//err = sys_mount("/dev/root", "/",NULL, MS_REMOUNT | MS_VERBOSE, NULL);
-		//if(err !=0)
-		//	lfd_log(LFD_ERROR, "sys_mount: errorcode %d errormsg %s", -err, lfd_apr_strerror_thunsafe(-err));
-		ftpd_main();	
+		err = sys_mount("/", "/",NULL, MS_REMOUNT | MS_VERBOSE, NULL);
+		if(err !=0)
+			lfd_log(LFD_ERROR, "sys_mount: errorcode %d errormsg %s", -err, lfd_apr_strerror_thunsafe(-err));
+		ftpd_main();
         }
-        return -1; 
+        return -1;
 }
 #endif
+
+volatile apr_uint32_t ftp_must_exit;
+static void sig_func(int sigid)
+{
+	printf("sig[%d]\n", sigid);
+	apr_atomic_set32(&ftp_must_exit, 1);
+}
 
 void ftpd_main(void)
 {
 	apr_pool_t * pool;
 	apr_status_t rc;
+
+	signal(SIGTERM, sig_func);
+	signal(SIGKILL, sig_func);
+	signal(SIGHUP, sig_func);
+	signal(SIGINT, sig_func);
 
 	apr_pool_create(&pool, NULL);
 	rc = lfd_config(pool);
@@ -167,11 +180,20 @@ void ftpd_main(void)
 		return;
 	}
 
-	apr_atomic_init(root_pool);
+	apr_atomic_init(pool);
+	apr_atomic_set32(&ftp_must_exit, 0);
+
 	printf("Ftp server is running.\n");
 	lfd_listen(pool);
-
+	printf("Ftp server is not running any more.\n");
 	apr_pool_destroy(pool);
+#ifdef LKL_FILE_APIS
+#define	LINUX_REBOOT_MAGIC1	0xfee1dead
+#define	LINUX_REBOOT_MAGIC2	672274793
+#define	LINUX_REBOOT_CMD_POWER_OFF	0x4321FEDC
+	exit(0);
+	sys_reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_POWER_OFF);
+#endif
 }
 
 int main(int argc, char const *const * argv, char const *const * engv)
@@ -195,7 +217,7 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	start_kernel();
 
 	apr_thread_mutex_destroy(kth_mutex);
-	apr_pool_destroy(root_pool);	
+	apr_pool_destroy(root_pool);
 #endif
 	return 0;
 }

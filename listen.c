@@ -1,13 +1,14 @@
 // implement the listener and thread dispatcher
 #include <string.h>
 #include <apr_thread_proc.h>
+#include <apr_poll.h>
 
 #include "listen.h"
 #include "config.h"
 #include "utils.h"
 #include "worker.h"
 
-
+extern volatile apr_uint32_t ftp_must_exit;
 static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 {
 	apr_status_t	rc;
@@ -45,7 +46,16 @@ static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 			}
 			else
 			{
-				break;
+				rc = apr_socket_listen(listen_sock, lfd_config_backlog);
+				if(APR_SUCCESS != rc)
+				{
+					lfd_log(LFD_ERROR, "create_listen_socket: apr_socket_listen failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+					apr_socket_close(listen_sock); listen_sock = NULL;
+				}
+				else
+				{
+					break;
+				}
 			}
 		}
 		saddr = saddr->next;
@@ -53,31 +63,40 @@ static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 	*plisten_sock = listen_sock;
 }
 
+void create_pollfd_from_socket(apr_pollfd_t * pfd, apr_socket_t * sock, apr_pool_t * mp)
+{
+	pfd->p = mp;
+	pfd->desc_type = APR_POLL_SOCKET;
+	pfd->reqevents = APR_POLLIN|APR_POLLHUP|APR_POLLERR;
+	pfd->rtnevents = 0;
+	pfd->desc.s = sock;
+	pfd->client_data = NULL;
+}
+
 void lfd_listen(apr_pool_t * mp)
 {
 	apr_status_t		rc;
-	apr_pool_t		* thd_pool;
+	apr_pool_t		* thd_pool = NULL;
 	apr_socket_t		* listen_sock;
 	apr_socket_t		* client_sock;
 	apr_thread_t 		* thd;
 	apr_threadattr_t	* thattr;
+	apr_pollfd_t		  pfd;
+	apr_interval_time_t	  timeout = APR_USEC_PER_SEC >> 1;
+	apr_int32_t		  nsds;
 
 	create_listen_socket(&listen_sock, mp);
 	if(NULL == listen_sock)
 	{
-		lfd_log(LFD_ERROR, "could not create listen socket");
+		lfd_log(LFD_ERROR, "lfd_listen: could not create listen socket");
 		return;
 	}
-	rc = apr_socket_listen(listen_sock, lfd_config_backlog);
-	if(APR_SUCCESS != rc)
-	{
-		lfd_log(LFD_ERROR, "apr_socket_listen failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
-		return;
-	}
+	create_pollfd_from_socket(&pfd, listen_sock, mp);
+
 	rc = apr_threadattr_create(&thattr, mp);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "apr_threadattr_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+		lfd_log(LFD_ERROR, "lfd_listen: apr_threadattr_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
 		return;
 	}
 	while(1)
@@ -85,10 +104,30 @@ void lfd_listen(apr_pool_t * mp)
 		//###: Should I allocate the pool as a subpool of the root pool?
 		//What is the amount allocated per pool and is it freed when the child pool is destroyed?
 		//rc = apr_pool_create(&thd_pool, mp);
-		rc = apr_pool_create(&thd_pool, NULL);
-		if(APR_SUCCESS != rc)
+		if(NULL == thd_pool)
 		{
-			lfd_log(LFD_ERROR, "apr_pool_create of thd_pool failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			rc = apr_pool_create(&thd_pool, NULL);
+			if(APR_SUCCESS != rc)
+			{
+				lfd_log(LFD_ERROR, "lfd_listen: apr_pool_create of thd_pool failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+				continue;
+			}
+		}
+
+		rc = apr_poll(&pfd, 1, &nsds, timeout);
+		if((APR_SUCCESS != rc) && (APR_TIMEUP != rc))
+		{
+			//break - an inrecoverable error occured
+			lfd_log(LFD_ERROR, "lfd_listen: apr_poll failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			break;
+		}
+
+		if(apr_atomic_read32(&ftp_must_exit))
+		{
+			break;
+		}
+		if(APR_TIMEUP == rc)
+		{
 			continue;
 		}
 
@@ -96,20 +135,24 @@ void lfd_listen(apr_pool_t * mp)
 		if(APR_SUCCESS != rc)
 		{
 			//###: For which errorcode must we break out of the loop?
-			lfd_log(LFD_ERROR, "apr_socket_accept failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
-			//maybe cache the successfully allocated pool and reuse it next iteration?
-			apr_pool_destroy(thd_pool);
+			lfd_log(LFD_ERROR, "lfd_listen: apr_socket_accept failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			if(APR_STATUS_IS_EAGAIN(rc))
+			{
+				lfd_log(LFD_ERROR, "lfd_listen: APR_STATUS_IS_EAGAIN");
+			}
 			continue;
 		}
-
+		#ifdef LKL_FILE_APIS
+			sys_sync();
+		#endif
 		rc = apr_thread_create(&thd, thattr, &lfd_worker_protocol_main, (void*)client_sock, thd_pool);
 		if(APR_SUCCESS != rc)
 		{
 			lfd_log(LFD_ERROR, "apr_thread_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
 			apr_socket_close(client_sock);
-			apr_pool_destroy(thd_pool);
 			continue;
 		}
+		thd_pool = NULL;
 	}
 }
 
