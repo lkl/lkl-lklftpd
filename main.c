@@ -4,6 +4,7 @@
 
 #include <apr.h>
 #include <apr_pools.h>
+#include <apr_signal.h>
 #include <apr_general.h>
 #include <apr_errno.h>
 #include <apr_atomic.h>
@@ -159,7 +160,6 @@ int kernel_execve(const char *filename, char *const argv[], char *const envp[])
 volatile apr_uint32_t ftp_must_exit;
 static void sig_func(int sigid)
 {
-	printf("sig[%d]\n", sigid);
 	apr_atomic_set32(&ftp_must_exit, 1);
 }
 
@@ -168,10 +168,10 @@ void ftpd_main(void)
 	apr_pool_t * pool;
 	apr_status_t rc;
 
-	signal(SIGTERM, sig_func);
-	signal(SIGKILL, sig_func);
-	signal(SIGHUP, sig_func);
-	signal(SIGINT, sig_func);
+	apr_signal(SIGTERM, sig_func);
+	apr_signal(SIGKILL, sig_func);
+	apr_signal(SIGHUP, sig_func);
+	apr_signal(SIGINT, sig_func);
 
 	apr_pool_create(&pool, NULL);
 	rc = lfd_config(pool);
