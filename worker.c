@@ -29,6 +29,12 @@ static int lfd_cmdio_cmd_equals(struct lfd_sess*sess, const char * cmd)
 	return sess->ftp_cmd_str && (0 == apr_strnatcasecmp(sess->ftp_cmd_str, cmd));
 }
 
+static void init_username_related_fields(struct lfd_sess * sess)
+{
+	sess->user = apr_pstrdup(sess->sess_pool, sess->user);
+	sess->home_str = apr_pstrcat(sess->sess_pool, "/home/", sess->user, "/", NULL);
+	sess->rel_path = "/";
+}
 
 static apr_status_t get_username_password(struct lfd_sess* p_sess)
 {
@@ -84,6 +90,8 @@ static apr_status_t get_username_password(struct lfd_sess* p_sess)
 	if (nr_tries >= lfd_config_max_login_attempts)
 		return APR_EINVAL;
 
+	init_username_related_fields(p_sess);
+
 	return APR_SUCCESS;
 }
 
@@ -122,7 +130,7 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 			continue;
 		}
 
-		if(lfd_cmdio_cmd_equals(sess, "PASIVE"))
+		if(lfd_cmdio_cmd_equals(sess, "PASV"))
 		{
 			rc = handle_passive(sess);
 		}
@@ -201,11 +209,32 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		{
 			rc = handle_appe(sess);
 		}
+		else if(lfd_cmdio_cmd_equals(sess, "SITE"))
+		{
+			rc = handle_site(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "ALLO"))
+		{
+			rc = lfd_cmdio_write(sess, FTP_ALLOOK, "ALLO command ignored.");
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "REIN"))
+		{
+			rc = lfd_cmdio_write(sess, FTP_COMMANDNOTIMPL, "REIN not implemented.");
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "ACCT"))
+		{
+			rc = lfd_cmdio_write(sess, FTP_COMMANDNOTIMPL, "ACCT not implemented.");
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "SMNT"))
+		{
+			rc = lfd_cmdio_write(sess, FTP_COMMANDNOTIMPL, "SMNT not implemented.");
+		}
 		else if(lfd_cmdio_cmd_equals(sess, "KILL"))//This is an extension hack
 		{
 			apr_atomic_set32(&ftp_must_exit, 1);
 			return APR_SUCCESS;
 		}
+
 		else //default
 		{
 			printf("The cmd [%s] has no installed handler! \n", sess->ftp_cmd_str);

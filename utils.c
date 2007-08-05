@@ -51,8 +51,7 @@ apr_size_t lfd_ascii_bin_to_ascii(const char* p_in, char* p_out, apr_size_t in_l
 }
 
 /**
- * @brief translate all \r\n into plain \n. A plain \r not followed by \n must
- * not be removed.
+ * @brief translate all \r\n into plain \n. A plain \r not followed by \n must not be removed.
  */
 struct ascii_to_bin_ret lfd_ascii_ascii_to_bin(char* p_buf, apr_size_t in_len, int prev_cr)
 {

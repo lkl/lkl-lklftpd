@@ -26,10 +26,10 @@ static apr_status_t lfd_cmdio_write_cmd(struct lfd_sess * sess, int cmd)
 
 apr_status_t lfd_cmdio_write(struct lfd_sess * sess, int cmd, const char *msg, ...)
 {
-	va_list ap;
-	char * buff = NULL;
-	apr_size_t len;
-	apr_status_t rc = APR_SUCCESS;
+	va_list		  ap;
+	char		* buff = NULL;
+	apr_size_t	  len;
+	apr_status_t	 rc = APR_SUCCESS;
 
 	rc = lfd_cmdio_write_cmd(sess, cmd);
 	if(APR_SUCCESS != rc)
@@ -50,12 +50,14 @@ apr_status_t lfd_cmdio_write(struct lfd_sess * sess, int cmd, const char *msg, .
 
 apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str, char** p_arg_str, int set_alarm)
 {
-	apr_status_t ret;
-	char *buffer;
-	char *cmd_body, *cmd_arg;
-	char * last;
-	const char *sep =" \r\n";
-	apr_size_t len = cmd_input_buffer_len;
+	apr_status_t		  ret;
+	char			* buffer;
+	char			* cmd_body, * cmd_arg;
+	char			* last;
+	const char		* sep =" " FTP_ENDCOMMAND_SEQUENCE;
+	apr_size_t		  len = cmd_input_buffer_len;
+
+
 	cmd_body = NULL;
 	cmd_arg = NULL;
 

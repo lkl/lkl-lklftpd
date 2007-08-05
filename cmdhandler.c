@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include <apr_strings.h>
 #include <apr_tables.h>
 
@@ -11,10 +13,14 @@
 //TODO: rename and move to apppropriate place
 #define VSFTP_DATA_BUFSIZE      65536
 
+static void port_cleanup(struct lfd_sess* p_sess);
+static void pasv_cleanup(struct lfd_sess* p_sess);
+
 int handle_user_cmd(struct lfd_sess* p_sess)
 {
 	//TODO: this is a hardcoded value! we need to check the user of the system!
 	//return (0 == apr_strnatcasecmp(p_sess->user, p_sess->ftp_arg_str));
+	p_sess->user = apr_pstrdup(p_sess->loop_pool, p_sess->ftp_arg_str);
 	return 1;
 }
 
@@ -27,6 +33,34 @@ int handle_pass_cmd(struct lfd_sess* p_sess)
 
 apr_status_t handle_passive(struct lfd_sess * sess)
 {
+	apr_status_t	  rc;
+	apr_socket_t	* listen_fd;
+	apr_sockaddr_t	* saddr;
+
+	port_cleanup(sess);
+	pasv_cleanup(sess);
+
+	rc = apr_sockaddr_info_get(&saddr, NULL, APR_UNSPEC, lfd_config_data_port, 0, sess->loop_pool);
+	if(APR_SUCCESS != rc)
+	{
+		return rc;
+	}
+	rc = apr_socket_create(&listen_fd, saddr->family, APR_UNSPEC, APR_PROTO_TCP, sess->sess_pool);
+	if(APR_SUCCESS != rc)
+	{
+		return rc;
+	}
+	rc = apr_socket_opt_set(listen_fd, APR_SO_REUSEADDR, 1);
+	if(APR_SUCCESS != rc)
+	{
+		return rc;
+	}
+	rc = apr_socket_bind(listen_fd, saddr);
+	if(APR_SUCCESS != rc)
+	{
+		return rc;
+	}
+	sess->pasv_listen_fd = listen_fd;
 	//TODO:implement
 	return APR_SUCCESS;
 }
@@ -55,7 +89,7 @@ apr_status_t handle_quit(struct lfd_sess * p_sess)
 		apr_thread_join(&ret, p_sess->data_conn->data_conn_th);
 		lfd_data_sess_destroy(p_sess->data_conn);
 	}
-	lfd_cmdio_write(p_sess,  FTP_GOODBYE, "See you later, aligator.\r\n");
+	lfd_cmdio_write(p_sess,  FTP_GOODBYE, "See you later, aligator." FTP_ENDCOMMAND_SEQUENCE);
 	return APR_SUCCESS;
 }
 
@@ -64,14 +98,14 @@ apr_status_t handle_abort(struct lfd_sess* p_sess)
 	// stop the active data transfer and close the data connection
 	if(0 == p_sess->data_conn->in_progress)
 	{
-		lfd_cmdio_write(p_sess, FTP_ABOR_NOCONN, "Nothing to abort.\r\n");
+		lfd_cmdio_write(p_sess, FTP_ABOR_NOCONN, "Nothing to abort." FTP_ENDCOMMAND_SEQUENCE);
 		return APR_SUCCESS;
 	}
 	if(NULL != p_sess->data_conn->data_conn_th)
 		apr_thread_exit(p_sess->data_conn->data_conn_th, APR_SUCCESS);
 
 	lfd_data_sess_destroy(p_sess->data_conn);
-	lfd_cmdio_write(p_sess, FTP_ABOROK, "File transfer aborted.\r\n");
+	lfd_cmdio_write(p_sess, FTP_ABOROK, "File transfer aborted." FTP_ENDCOMMAND_SEQUENCE);
 	return APR_SUCCESS;
 }
 
@@ -80,9 +114,9 @@ static char * get_abs_path(struct lfd_sess *p_sess)
 	char * path;
 
 	if('/' == *(p_sess->ftp_arg_str))
-		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str+1, NULL);
+		path = apr_pstrdup(p_sess->loop_pool, p_sess->ftp_arg_str);
 	else
-		if(0 ==apr_strnatcmp(p_sess->rel_path, "/"))
+		if(0 == apr_strnatcmp(p_sess->rel_path, "/"))
 			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str, NULL);
 	else
 		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1,"/", p_sess->ftp_arg_str, NULL);
@@ -338,9 +372,7 @@ apr_status_t handle_type(struct lfd_sess *sess)
 /**
  *@brief parses a string of delimited numbers between 0 and 255 and stores them in the p_items buffer
  */
-const unsigned char * lkl_str_parse_uchar_string_sep(
-		char * input_str, char sep, unsigned char* p_items,
-  unsigned int items)
+const unsigned char * lkl_str_parse_uchar_string_sep(char * input_str, char sep, unsigned char* p_items, unsigned int items)
 {
 	char * last, * str;
 	unsigned int i;
@@ -547,6 +579,44 @@ static apr_status_t get_bound_and_connected_ftp_port_sock(struct lfd_sess* p_ses
 	return APR_SUCCESS;
 }
 
+/**
+ * @brief Get a connected socket to the client's listening data port.
+ * Also binds the local end of the socket to a configurable (default 20) data port.
+ */
+static apr_status_t get_bound_and_connected_ftp_pasv_sock(struct lfd_sess* p_sess, apr_socket_t ** psock)
+{
+// 	apr_socket_t	* sock;
+// 	apr_sockaddr_t	* saddr;
+// 	apr_status_t	  rc;
+//
+// 	*psock = NULL;
+//
+// 	rc = apr_socket_listen(p_sess->pasv_listen_fd, 1); //backlog of one!
+// 	rc = apr_socket_connect (sock, p_sess->p_port_sockaddr);
+// 	if(APR_SUCCESS != rc)
+// 		return rc;
+//
+// 	*psock = sock;
+	return APR_SUCCESS;
+}
+
+static apr_status_t lfd_ftpdataio_get_pasv_fd(struct lfd_sess* p_sess, apr_socket_t ** psock)
+{
+	apr_status_t	  rc;
+	apr_socket_t	* remote_fd;
+	*psock = NULL;
+	rc = get_bound_and_connected_ftp_pasv_sock(p_sess, &remote_fd);
+	if (APR_SUCCESS != rc)
+	{
+		lfd_cmdio_write(p_sess, FTP_BADSENDCONN, "Failed to establish connection.");
+		lfd_log(LFD_ERROR, "get_bound_and_connected_ftp_port_sock failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(p_sess, rc));
+		return rc;
+	}
+
+	init_data_sock_params(p_sess, remote_fd);
+	*psock = remote_fd;
+	return APR_SUCCESS;
+}
 
 static apr_status_t ftpdataio_get_port_fd(struct lfd_sess* p_sess, apr_socket_t ** psock)
 {
@@ -581,7 +651,7 @@ static apr_socket_t* get_remote_transfer_fd(struct lfd_sess* p_sess, const char*
 	p_sess->data_conn->abor_received = 0;
 	if (pasv_active(p_sess))
 	{
-		//remote_fd = lfd_ftpdataio_get_pasv_fd(p_sess);
+		lfd_ftpdataio_get_pasv_fd(p_sess, &remote_fd);
 	}
 	else
 	{
@@ -996,7 +1066,7 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 	remote_fd = get_remote_transfer_fd(sess, msg);
 	if(NULL == remote_fd)
 	{
-		return rc;
+		return APR_EINVAL;
 	}
 	trans_ret = do_file_recv(sess, file, sess->is_ascii);
 	lfd_dispose_transfer_fd(sess);
@@ -1040,51 +1110,52 @@ apr_status_t handle_stou(struct lfd_sess *sess)
 }
 
 
-static apr_status_t list_dir(apr_array_header_t *files, const char * directory, apr_pool_t * pool)
+static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** p_dest)
 {
-	apr_pool_t *hash_pool = files->pool; // array pool
-	char * child_path;
+	apr_dir_t	* dir;
+	apr_finfo_t	  finfo;
+	apr_status_t	  apr_err;
+	apr_int32_t	  flags = APR_FINFO_TYPE | APR_FINFO_NAME | APR_FINFO_SIZE;
 
-	lkl_dir_t *dir;
-	apr_finfo_t finfo;
-	apr_status_t apr_err;
-	apr_int32_t flags = APR_FINFO_TYPE | APR_FINFO_NAME;
-
-	apr_err =lkl_dir_open(&dir, directory, pool);
-	if(apr_err)
-		return apr_err;
-
-	for(apr_err = lkl_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS;
-		   apr_err = lkl_dir_read(&finfo, flags, dir))
+	apr_err = apr_dir_open(&dir, directory, pool);
+	if(APR_SUCCESS != apr_err)
 	{
-		if(finfo.filetype == APR_DIR && ((finfo.name[0] == '.' && finfo.name[1]=='\0') ||
-				 (finfo.name[1] == '.' && finfo.name[2] =='\0')))
-			continue;
-		child_path = apr_pstrdup(hash_pool, finfo.name);
-		(*(const char **) apr_array_push (files) ) = child_path;
+		*p_dest = FTP_ENDCOMMAND_SEQUENCE;
+		return apr_err;
 	}
-	lkl_dir_close(dir);
+	else
+	{
+		*p_dest = "";
+	}
 
+	for(apr_err = apr_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS;
+		   apr_err = apr_dir_read(&finfo, flags, dir))
+	{
+		if(finfo.filetype == APR_DIR && ((finfo.name[0] == '.' && finfo.name[1] == '\0') ||
+				 ( finfo.name[1] == '.' && finfo.name[2] == '\0')))
+			continue;
+		*p_dest = apr_pstrcat(pool, *p_dest, finfo.name, FTP_ENDCOMMAND_SEQUENCE, NULL);
+	}
+	apr_dir_close(dir);
 	return APR_SUCCESS;
 }
 
+
 apr_status_t handle_list(struct lfd_sess *p_sess)
 {
-	apr_array_header_t *list_head;
-	apr_status_t ret;
-	char * file_list;
-	char *path;
+	apr_socket_t 		* remote_fd;
+	apr_status_t		  ret;
+	apr_size_t		  file_list_len, bytes_written;
+	char			* file_list;
+	char			* path;
 
-	list_head = apr_array_make(p_sess->loop_pool, 0, sizeof(char*));
 	// if the arg was NULL, take the current directory
 	if(NULL == p_sess->ftp_arg_str)
 	{
-		if(0 == apr_strnatcmp(p_sess->rel_path, "/"))
-			path = apr_pstrdup(p_sess->loop_pool, p_sess->home_str);
-		else{
-			printf("%s\n",p_sess->rel_path);
+		if('/' == *p_sess->rel_path)
+			path = apr_pstrcat(p_sess->loop_pool, p_sess->rel_path, NULL);
+		else
 			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1,NULL);
-		}
 	}
 	else
 		path = get_abs_path(p_sess);
@@ -1093,15 +1164,123 @@ apr_status_t handle_list(struct lfd_sess *p_sess)
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
-	printf("%s\n", path);
-	ret = list_dir(list_head, path, p_sess->loop_pool);
+
+	ret = list_dir(path, p_sess->loop_pool, &file_list);
 	if(APR_SUCCESS != ret)
 	{
 		lfd_log(LFD_ERROR, "list_dir failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
 		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot list files.");
 		return ret;
 	}
-	file_list = apr_array_pstrcat(p_sess->loop_pool, list_head, '\n');
-	ret = lfd_cmdio_write(p_sess, FTP_ALLOOK,"\n%s", file_list);
+	file_list_len = bytes_written = strlen(file_list);
+
+	remote_fd = get_remote_transfer_fd(p_sess, "Here comes the directory listing");
+	if(NULL == remote_fd)
+	{
+		return APR_EINVAL;
+	}
+	ret = apr_socket_send(remote_fd, file_list, &bytes_written);
+	if((APR_SUCCESS == ret) && (file_list_len == bytes_written))
+	{
+		ret = lfd_cmdio_write(p_sess, FTP_TRANSFEROK, "Directory sent OK");
+	}
+	else
+	{
+		ret = lfd_cmdio_write(p_sess, FTP_BADSENDNET, "Error sendind data");
+	}
+	lfd_dispose_transfer_fd(p_sess);
+
+
 	return ret;
 }
+
+
+apr_status_t handle_site(struct lfd_sess* p_sess)
+{
+	apr_status_t rc = APR_SUCCESS;
+	if (0 == apr_strnatcasecmp("CHMOD", p_sess->ftp_arg_str) )
+	{
+		lfd_log(LFD_ERROR, "SITE CHMOD NIMPL");
+	}
+	else if (0 == apr_strnatcasecmp("UMASK", p_sess->ftp_arg_str) )
+	{
+		lfd_log(LFD_ERROR, "SITE UMASK NIMPL");
+	}
+	else if (0 == apr_strnatcasecmp("HELP", p_sess->ftp_arg_str) )
+	{
+		rc = lfd_cmdio_write(p_sess, FTP_SITEHELP, "CHMOD UMASK HELP");
+	}
+	else
+	{
+		rc = lfd_cmdio_write(p_sess, FTP_BADCMD, "Unknown SITE command.");
+	}
+	return rc;
+}
+/*
+
+static void
+		handle_site_chmod(struct vsf_session* p_sess, struct mystr* p_arg_str)
+{
+	static struct mystr s_chmod_file_str;
+	unsigned int perms;
+	int retval;
+	if (str_isempty(p_arg_str))
+	{
+		vsf_cmdio_write(p_sess, FTP_BADCMD, "SITE CHMOD needs 2 arguments.");
+		return;
+	}
+	str_split_char(p_arg_str, &s_chmod_file_str, ' ');
+	if (str_isempty(&s_chmod_file_str))
+	{
+		vsf_cmdio_write(p_sess, FTP_BADCMD, "SITE CHMOD needs 2 arguments.");
+		return;
+	}
+	resolve_tilde(&s_chmod_file_str, p_sess);
+	vsf_log_start_entry(p_sess, kVSFLogEntryChmod);
+	str_copy(&p_sess->log_str, &s_chmod_file_str);
+	prepend_path_to_filename(&p_sess->log_str);
+	str_append_char(&p_sess->log_str, ' ');
+	str_append_str(&p_sess->log_str, p_arg_str);
+	if (!vsf_access_check_file(&s_chmod_file_str))
+	{
+		vsf_cmdio_write(p_sess, FTP_NOPERM, "Permission denied.");
+		return;
+	}
+	// Don't worry - our chmod() implementation only allows 0 - 0777
+	perms = str_octal_to_uint(p_arg_str);
+	retval = str_chmod(&s_chmod_file_str, perms);
+	if (vsf_sysutil_retval_is_error(retval))
+	{
+		vsf_cmdio_write(p_sess, FTP_FILEFAIL, "SITE CHMOD command failed.");
+	}
+	else
+	{
+		vsf_log_do_log(p_sess, 1);
+		vsf_cmdio_write(p_sess, FTP_CHMODOK, "SITE CHMOD command ok.");
+	}
+}
+
+static void
+		handle_site_umask(struct vsf_session* p_sess, struct mystr* p_arg_str)
+{
+	static struct mystr s_umask_resp_str;
+	if (str_isempty(p_arg_str))
+	{
+		// Empty arg => report current umask
+		str_alloc_text(&s_umask_resp_str, "Your current UMASK is ");
+		str_append_text(&s_umask_resp_str,
+				 vsf_sysutil_uint_to_octal(vsf_sysutil_get_umask()));
+	}
+	else
+	{
+		// Set current umask
+		unsigned int new_umask = str_octal_to_uint(p_arg_str);
+		vsf_sysutil_set_umask(new_umask);
+		str_alloc_text(&s_umask_resp_str, "UMASK set to ");
+		str_append_text(&s_umask_resp_str,
+				 vsf_sysutil_uint_to_octal(vsf_sysutil_get_umask()));
+	}
+	vsf_cmdio_write_str(p_sess, FTP_UMASKOK, &s_umask_resp_str);
+}
+*/
+
