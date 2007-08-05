@@ -6,6 +6,7 @@
 #include <asm/stat.h>
 
 #include "fileops.h"
+#include "sys_declarations.h"
 
 
 apr_fileperms_t lkl_unix_mode2perms(mode_t mode)
@@ -38,9 +39,9 @@ apr_fileperms_t lkl_unix_mode2perms(mode_t mode)
 		perms |= APR_WWRITE;
 	if (mode & S_IXOTH)
 		perms |= APR_WEXECUTE;
-	
+
 	return perms;
-} 
+}
 
 mode_t lkl_unix_perms2mode(apr_fileperms_t perms)
 {
@@ -111,7 +112,7 @@ static apr_filetype_e filetype_from_mode(mode_t mode)
 #endif
 					type = APR_UNKFILE;
 	}
-	
+
 	return type;
 }
 
@@ -129,7 +130,7 @@ static void fill_out_finfo(apr_finfo_t *finfo, struct stat *info,apr_int32_t wan
 	finfo->nlink = info->st_nlink;
 	apr_time_ansi_put(&finfo->atime, info->st_atime);
 	apr_time_ansi_put(&finfo->mtime, info->st_mtime);
-	apr_time_ansi_put(&finfo->ctime, info->st_ctime);	
+	apr_time_ansi_put(&finfo->ctime, info->st_ctime);
 }
 
 apr_status_t lkl_file_info_get_locked(apr_finfo_t *finfo, apr_int32_t wanted,
@@ -138,14 +139,14 @@ apr_status_t lkl_file_info_get_locked(apr_finfo_t *finfo, apr_int32_t wanted,
 	struct stat info;
 	apr_status_t ret;
 
-	if (thefile->buffered) 
+	if (thefile->buffered)
 	{
 		apr_status_t rv = lkl_file_flush_locked(thefile);
 		if (rv != APR_SUCCESS)
 			return rv;
 	}
 	ret = sys_newfstat(thefile->filedes, &info);
-	if (!ret) 
+	if (!ret)
 	{
 		finfo->pool = thefile->pool;
 		finfo->fname = thefile->fname;
@@ -161,14 +162,14 @@ apr_status_t lkl_file_info_get(apr_finfo_t *finfo, apr_int32_t wanted, lkl_file_
 	struct stat info;
 	int ret;
 
-	if (thefile->buffered) 
+	if (thefile->buffered)
 	{
 		apr_status_t rv = lkl_file_flush(thefile);
 		if (rv != APR_SUCCESS)
 		return rv;
 	}
 	ret = sys_newfstat(thefile->filedes, &info);
-	if (0 == ret) 
+	if (0 == ret)
 	{
 		finfo->pool = thefile->pool;
 		finfo->fname = thefile->fname;
@@ -186,7 +187,7 @@ apr_status_t lkl_file_perms_set(const char *fname, apr_fileperms_t perms)
 	ret = sys_chmod(fname, mode);
 	if (ret)
 		return -ret;
-	
+
 	return APR_SUCCESS;
 }
 
@@ -195,16 +196,16 @@ apr_status_t lkl_file_attrs_set(const char *fname, apr_fileattrs_t attributes,
 {
 	apr_status_t status;
 	apr_finfo_t finfo;
-	
+
 	/* Don't do anything if we can't handle the requested attributes */
 	if (!(attr_mask & (APR_FILE_ATTR_READONLY
 			| APR_FILE_ATTR_EXECUTABLE)))
 	return APR_SUCCESS;
-	
+
 	status = lkl_stat(&finfo, fname, APR_FINFO_PROT, pool);
 	if (status)
 		return status;
-	
+
 	/* ### TODO: should added bits be umask'd? */
 	if (attr_mask & APR_FILE_ATTR_READONLY)
 	{
@@ -222,7 +223,7 @@ apr_status_t lkl_file_attrs_set(const char *fname, apr_fileattrs_t attributes,
 			finfo.protection |= APR_WWRITE;
 		}
 		}
-		
+
 		if (attr_mask & APR_FILE_ATTR_EXECUTABLE)
 		{
 		if (attributes & APR_FILE_ATTR_EXECUTABLE)
@@ -239,7 +240,7 @@ apr_status_t lkl_file_attrs_set(const char *fname, apr_fileattrs_t attributes,
 			finfo.protection &= ~APR_WEXECUTE;
 		}
 	}
-	
+
 	return lkl_file_perms_set(fname, finfo.protection);
 }
 
@@ -248,39 +249,39 @@ apr_status_t lkl_file_mtime_set(const char *fname, apr_time_t mtime,
 {
 	apr_status_t status;
 	apr_finfo_t finfo;
-	
+
 	status = lkl_stat(&finfo, fname, APR_FINFO_ATIME, pool);
-	if (status) 
+	if (status)
 		return status;
-	
+
 	#ifdef HAVE_UTIMES
 	{
 		struct timeval tvp[2];
-		
+
 		tvp[0].tv_sec = apr_time_sec(finfo.atime);
 		tvp[0].tv_usec = apr_time_usec(finfo.atime);
 		tvp[1].tv_sec = apr_time_sec(mtime);
 		tvp[1].tv_usec = apr_time_usec(mtime);
-		
+
 		status = sys_utimes(fname, tvp);
-		if (status) 
+		if (status)
 			return status;
 	}
 	#elif defined(HAVE_UTIME)
 	{
 		struct utimbuf buf;
-		
+
 		buf.actime = (time_t) (finfo.atime / APR_USEC_PER_SEC);
 		buf.modtime = (time_t) (mtime / APR_USEC_PER_SEC);
-		
+
 		status = sys_utime(fname, &buf);
-		if (status) 
+		if (status)
 			return status;
 	}
 	#else
 		return APR_ENOTIMPL;
 	#endif
-	
+
 	return APR_SUCCESS;
 }
 
@@ -288,14 +289,14 @@ apr_status_t lkl_stat(apr_finfo_t *finfo,const char *fname, apr_int32_t wanted, 
 {
 	struct stat info;
 	int srv =0;
-	
+
 	memset(&info,0,sizeof(struct stat));
 	if (wanted & APR_FINFO_LINK)
-		srv = sys_newlstat(fname, &info);
+		srv = sys_newlstat((char*)fname, &info);
 	else
-		srv = sys_newstat(fname, &info);
-	
-	if (0 == srv) 
+		srv = sys_newstat((char*)fname, &info);
+
+	if (0 == srv)
 	{
 		finfo->pool = pool;
 		finfo->fname = fname;
@@ -304,7 +305,7 @@ apr_status_t lkl_stat(apr_finfo_t *finfo,const char *fname, apr_int32_t wanted, 
 			wanted &= ~APR_FINFO_LINK;
 		return (wanted & ~finfo->valid) ? APR_INCOMPLETE : APR_SUCCESS;
 	}
-/*	else 
+/*	else
 	{
 #if !defined(ENOENT) || !defined(ENOTDIR)
 #if !defined(ENOENT)
@@ -320,6 +321,6 @@ apr_status_t lkl_stat(apr_finfo_t *finfo,const char *fname, apr_int32_t wanted, 
 #endif
 	} */
 	return -srv;
-} 
+}
 
 #endif

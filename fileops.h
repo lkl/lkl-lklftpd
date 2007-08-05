@@ -6,7 +6,7 @@
 #include <apr_file_io.h>
 
 #define lkl_file_t   apr_file_t
-#define lkl_dir_t    apr_dir_t 
+#define lkl_dir_t    apr_dir_t
 
 #define lkl_file_read		apr_file_read
 #define lkl_file_writev		apr_file_writev
@@ -95,13 +95,13 @@ struct lkl_file_t
 };
 
 typedef struct lkl_file_t lkl_file_t;
-
+struct linux_dirent;
 struct lkl_dir_t
 {
 	apr_pool_t *pool;
 	char * dirname; // dir name
 	int fd; // file descriptor
-	char * data; // dir block
+	struct linux_dirent * data; // dir block
 	int offset; // current offset
 	int size; // total valid data
 	struct dirent *entry; // current entry
@@ -546,7 +546,7 @@ apr_status_t lkl_dir_close(lkl_dir_t * thedir);
 * @param perm 	Permissions for the new direcoty.
 * @param pool 	the pool to use.
 */
-apr_status_t lkl_dir_make(const char *path, apr_fileperms_t perm, 
+apr_status_t lkl_dir_make(const char *path, apr_fileperms_t perm,
                           apr_pool_t *pool);
 
 /**

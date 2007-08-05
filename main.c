@@ -3,10 +3,12 @@
 //#include <stdio.h>
 
 #include <apr.h>
+#include <apr_pools.h>
 #include <apr_general.h>
 #include <apr_errno.h>
 #include <apr_atomic.h>
 
+#include "sys_declarations.h"
 #include "utils.h"
 #include "config.h"
 #include "listen.h"
@@ -192,7 +194,7 @@ void ftpd_main(void)
 #define	LINUX_REBOOT_MAGIC2	672274793
 #define	LINUX_REBOOT_CMD_POWER_OFF	0x4321FEDC
 	exit(0);
-	sys_reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_POWER_OFF);
+	sys_reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_POWER_OFF, NULL);
 #endif
 }
 

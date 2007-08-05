@@ -1,8 +1,11 @@
 // implement the listener and thread dispatcher
 #include <string.h>
+
+#include <apr_atomic.h>
 #include <apr_thread_proc.h>
 #include <apr_poll.h>
 
+#include "sys_declarations.h"
 #include "listen.h"
 #include "config.h"
 #include "utils.h"
