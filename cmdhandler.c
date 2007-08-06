@@ -18,16 +18,14 @@ static void pasv_cleanup(struct lfd_sess* p_sess);
 
 int handle_user_cmd(struct lfd_sess* p_sess)
 {
-	//TODO: this is a hardcoded value! we need to check the user of the system!
-	//return (0 == apr_strnatcasecmp(p_sess->user, p_sess->ftp_arg_str));
+	//###: any user is accepted
 	p_sess->user = apr_pstrdup(p_sess->loop_pool, p_sess->ftp_arg_str);
 	return 1;
 }
 
 int handle_pass_cmd(struct lfd_sess* p_sess)
 {
-	//TODO: this is a hardcoded value! we need to check the passwd of the system!
-	//return p_sess->ftp_arg_str && (0 == apr_strnatcasecmp(p_sess->passwd, p_sess->ftp_arg_str) );
+	//###: any pass is accepted
 	return 1;
 }
 
@@ -89,7 +87,7 @@ apr_status_t handle_quit(struct lfd_sess * p_sess)
 		apr_thread_join(&ret, p_sess->data_conn->data_conn_th);
 		lfd_data_sess_destroy(p_sess->data_conn);
 	}
-	lfd_cmdio_write(p_sess,  FTP_GOODBYE, "See you later, aligator." FTP_ENDCOMMAND_SEQUENCE);
+	lfd_cmdio_write(p_sess,  FTP_GOODBYE, "See you later, aligator.");
 	return APR_SUCCESS;
 }
 
@@ -98,14 +96,14 @@ apr_status_t handle_abort(struct lfd_sess* p_sess)
 	// stop the active data transfer and close the data connection
 	if(0 == p_sess->data_conn->in_progress)
 	{
-		lfd_cmdio_write(p_sess, FTP_ABOR_NOCONN, "Nothing to abort." FTP_ENDCOMMAND_SEQUENCE);
+		lfd_cmdio_write(p_sess, FTP_ABOR_NOCONN, "Nothing to abort.");
 		return APR_SUCCESS;
 	}
 	if(NULL != p_sess->data_conn->data_conn_th)
 		apr_thread_exit(p_sess->data_conn->data_conn_th, APR_SUCCESS);
 
 	lfd_data_sess_destroy(p_sess->data_conn);
-	lfd_cmdio_write(p_sess, FTP_ABOROK, "File transfer aborted." FTP_ENDCOMMAND_SEQUENCE);
+	lfd_cmdio_write(p_sess, FTP_ABOROK, "File transfer aborted.");
 	return APR_SUCCESS;
 }
 

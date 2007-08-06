@@ -99,9 +99,9 @@ static apr_status_t get_username_password(struct lfd_sess* p_sess)
 
 static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 {
-	apr_status_t rc = APR_SUCCESS;
-	int rnfrto; // "rename from" and "rename to" should go togheter
-	char * temp_name;
+	apr_status_t	  rc = APR_SUCCESS;
+	int 		  rnfrto; // "rename from" and "rename to" should go togheter
+	char		* temp_name;
 
 	temp_name = NULL;
 	rnfrto = 0;
