@@ -251,14 +251,12 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 
 	// add to the current rel_path ftp_arg_str
 	if('/' == *(p_sess->ftp_arg_str))
-		p_sess->rel_path = apr_pstrdup(p_sess->loop_pool,p_sess->ftp_arg_str);
+		p_sess->rel_path = apr_pstrdup(p_sess->sess_pool,p_sess->ftp_arg_str);
 	else if( 0 == apr_strnatcmp(p_sess->rel_path,"/"))
-		p_sess->rel_path = apr_pstrcat(p_sess->loop_pool,"/", p_sess->ftp_arg_str,NULL);
+		p_sess->rel_path = apr_pstrcat(p_sess->sess_pool,"/", p_sess->ftp_arg_str,NULL);
 	else
-		p_sess->rel_path = apr_pstrcat(p_sess->loop_pool, p_sess->rel_path,"/", p_sess->ftp_arg_str, NULL);
+		p_sess->rel_path = apr_pstrcat(p_sess->sess_pool, p_sess->rel_path,"/", p_sess->ftp_arg_str, NULL);
 
-	// must do this, otherwise rel_path will be lost
-	p_sess->rel_path = apr_pstrdup(p_sess->sess_pool, p_sess->rel_path);
 	ret = lfd_cmdio_write(p_sess, FTP_CWDOK, "Directory changed to %s.", p_sess->rel_path);
 
 	return ret;
