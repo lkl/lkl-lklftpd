@@ -229,12 +229,6 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		{
 			rc = lfd_cmdio_write(sess, FTP_COMMANDNOTIMPL, "SMNT not implemented.");
 		}
-		else if(lfd_cmdio_cmd_equals(sess, "KILL"))//This is an extension hack
-		{
-			apr_atomic_set32(&ftp_must_exit, 1);
-			return APR_SUCCESS;
-		}
-
 		else //default
 		{
 			printf("The cmd [%s] has no installed handler! \n", sess->ftp_cmd_str);
