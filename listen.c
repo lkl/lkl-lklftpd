@@ -78,15 +78,15 @@ void create_pollfd_from_socket(apr_pollfd_t * pfd, apr_socket_t * sock, apr_pool
 
 void lfd_listen(apr_pool_t * mp)
 {
-	apr_status_t		rc;
-	apr_pool_t			* thd_pool = NULL;
+	apr_pool_t		* thd_pool = NULL;
 	apr_socket_t		* listen_sock;
 	apr_socket_t		* client_sock;
 	apr_thread_t 		* thd;
 	apr_threadattr_t	* thattr;
 	apr_pollfd_t		  pfd;
-	apr_interval_time_t	  timeout = APR_USEC_PER_SEC >> 1;
-	apr_int32_t			nsds;
+	apr_interval_time_t	  timeout = lfd_config_max_acceptloop_timeout;
+	apr_int32_t		  nsds;
+	apr_status_t		  rc;
 
 	create_listen_socket(&listen_sock, mp);
 	if(NULL == listen_sock)
@@ -120,19 +120,21 @@ void lfd_listen(apr_pool_t * mp)
 		rc = apr_poll(&pfd, 1, &nsds, timeout);
 		if((APR_SUCCESS != rc) && (APR_TIMEUP != rc))
 		{
-			//break - an inrecoverable error occured
+			//break - an unrecoverable error occured
 			lfd_log(LFD_ERROR, "lfd_listen: apr_poll failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
 			break;
 		}
 
 		if(apr_atomic_read32(&ftp_must_exit))
 		{
-			break;
+			//if the flag says we must exit, we comply, so bye bye!
+			return;
 		}
-		if(APR_TIMEUP == rc)
+		if((APR_TIMEUP == rc) || (APR_POLLIN != pfd.rtnevents))
 		{
 			continue;
 		}
+
 
 		rc = apr_socket_accept(&client_sock, listen_sock, thd_pool);
 		if(APR_SUCCESS != rc)
@@ -146,6 +148,7 @@ void lfd_listen(apr_pool_t * mp)
 			continue;
 		}
 		#ifdef LKL_FILE_APIS
+			//###: is this a proper place to issue an "flush buffers to disk"?
 			sys_sync();
 		#endif
 		rc = apr_thread_create(&thd, thattr, &lfd_worker_protocol_main, (void*)client_sock, thd_pool);

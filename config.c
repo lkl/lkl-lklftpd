@@ -1,5 +1,8 @@
+#include <apr_time.h>
 #include "config.h"
 
+
+int lfd_config_max_acceptloop_timeout = APR_USEC_PER_SEC >> 1;
 int lfd_config_max_login_attempts = 3;
 int lfd_config_listen_port = 21;
 int lfd_config_data_port = 20;

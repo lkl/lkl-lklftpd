@@ -169,18 +169,22 @@ static void sig_func(int sigid)
 	// if it sees it set it will stop receiving connections and begin a teardown of the kernel.
 	apr_atomic_set32(&ftp_must_exit, 1);
 }
+
 apr_pool_t	* root_pool;
 void ftpd_main(void)
 {
 	printf("Ftp server preparing to accept client connections.\n");
 	lfd_listen(root_pool);
 	printf("Ftp server is not running any more. Client connections will be obliterated.\n");
+
 #ifdef LKL_FILE_APIS
+	//flush them buffers!
+	sys_sync();
+	//nothing gets past this exit call; This is a hack currently used to stop the kernel from issuing a kernel panic.
+	exit(0);
 	#define	LINUX_REBOOT_MAGIC1		0xfee1dead
 	#define	LINUX_REBOOT_MAGIC2		672274793
 	#define	LINUX_REBOOT_CMD_POWER_OFF	0x4321FEDC
-	//nothing gets past this exit call; This is a hack currently used to stop the kernel from issuing a kernel panic.
-	exit(0);
 	sys_reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_POWER_OFF, NULL);
 #endif
 }

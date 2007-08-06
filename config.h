@@ -4,6 +4,7 @@
 #include <apr_pools.h>
 
 
+extern int lfd_config_max_acceptloop_timeout;
 extern int lfd_config_max_login_attempts;
 extern int lfd_config_listen_port;
 extern int lfd_config_data_port;
