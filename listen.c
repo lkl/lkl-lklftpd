@@ -79,14 +79,14 @@ void create_pollfd_from_socket(apr_pollfd_t * pfd, apr_socket_t * sock, apr_pool
 void lfd_listen(apr_pool_t * mp)
 {
 	apr_status_t		rc;
-	apr_pool_t		* thd_pool = NULL;
+	apr_pool_t			* thd_pool = NULL;
 	apr_socket_t		* listen_sock;
 	apr_socket_t		* client_sock;
 	apr_thread_t 		* thd;
 	apr_threadattr_t	* thattr;
 	apr_pollfd_t		  pfd;
 	apr_interval_time_t	  timeout = APR_USEC_PER_SEC >> 1;
-	apr_int32_t		  nsds;
+	apr_int32_t			nsds;
 
 	create_listen_socket(&listen_sock, mp);
 	if(NULL == listen_sock)

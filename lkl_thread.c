@@ -3,7 +3,7 @@
 #include "lkl_thread.h"
 
 apr_thread_mutex_t *kth_mutex;
-apr_pool_t * root_pool;
+apr_pool_t * lkl_thread_creator_pool;
 
 int private_thread_info_size(void)
 {
@@ -14,7 +14,7 @@ void private_thread_info_init(void *arg)
 {
         struct _thread_info *pti=(struct _thread_info*)arg;
 
-        apr_thread_mutex_create(&pti->sched_mutex, APR_THREAD_MUTEX_DEFAULT,root_pool);
+	apr_thread_mutex_create(&pti->sched_mutex, APR_THREAD_MUTEX_DEFAULT, lkl_thread_creator_pool);
         apr_thread_mutex_lock(pti->sched_mutex);
 }
 
@@ -47,7 +47,6 @@ void destroy_thread(void *arg)
 	apr_status_t ret;
 
 	apr_thread_mutex_destroy(pti->sched_mutex);
-        //pthread_cancel(pti->th);
 	apr_thread_exit(pti->th,ret);
 }
 
@@ -60,7 +59,7 @@ int _copy_thread(int (*fn)(void*), void *arg, void *pti)
         };
         int ret;
 
-        ret=apr_thread_create(&ktha.pti->th, NULL, kernel_thread_helper, &ktha,root_pool);
+	ret=apr_thread_create(&ktha.pti->th, NULL, kernel_thread_helper, &ktha, lkl_thread_creator_pool);
         apr_thread_mutex_lock(kth_mutex);
         return ret;
 }
@@ -69,4 +68,4 @@ void cpu_wait_events(void)
 {
 }
 
-#endif
+#endif //LKL_FILE_APIS

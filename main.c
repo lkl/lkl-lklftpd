@@ -14,6 +14,9 @@
 #include "config.h"
 #include "listen.h"
 
+volatile apr_uint32_t ftp_must_exit;
+
+
 void ftpd_main(void);
 
 #ifdef LKL_FILE_APIS
@@ -118,7 +121,7 @@ unsigned long _sbull_sectors(void)
 
 void _sbull_transfer(int fd, unsigned long sector, unsigned long nsect, char *buffer, int dir)
 {
-	  assert(lseek64(fd, sector*512, SEEK_SET) >= 0);
+	assert(lseek64(fd, sector*512, SEEK_SET) >= 0);
 
         if (dir)
                 assert(write(fd, buffer, nsect*512) == nsect*512);
@@ -149,58 +152,44 @@ int kernel_execve(const char *filename, char *const argv[], char *const envp[])
 		int err = 0;
 		// remount the file system with write access
 		err = sys_mount("/", "/",NULL, MS_REMOUNT | MS_VERBOSE, NULL);
-		if(err !=0)
+		if(0 != err)
 			lfd_log(LFD_ERROR, "sys_mount: errorcode %d errormsg %s", -err, lfd_apr_strerror_thunsafe(-err));
 		ftpd_main();
+		//we shouldn't exit this function because the kernel will panic.
         }
         return -1;
 }
 #endif
 
-volatile apr_uint32_t ftp_must_exit;
+
 static void sig_func(int sigid)
 {
+	//whenever a "shutdown" signal is received (CTRL+C, SIGHUP, etc.) we set the ftp_must_exit flag.
+	// this flag is periodically checked by the loop that accepts client connections.
+	// if it sees it set it will stop receiving connections and begin a teardown of the kernel.
 	apr_atomic_set32(&ftp_must_exit, 1);
 }
-
+apr_pool_t	* root_pool;
 void ftpd_main(void)
 {
-	apr_pool_t * pool;
-	apr_status_t rc;
-
-	apr_signal(SIGTERM, sig_func);
-	apr_signal(SIGKILL, sig_func);
-	apr_signal(SIGHUP, sig_func);
-	apr_signal(SIGINT, sig_func);
-
-	apr_pool_create(&pool, NULL);
-	rc = lfd_config(pool);
-	if(APR_SUCCESS != rc)
-	{
-		lfd_log(LFD_ERROR, "Config file wrong. Exiting");
-		apr_pool_destroy(pool);
-		return;
-	}
-
-	apr_atomic_init(pool);
-	apr_atomic_set32(&ftp_must_exit, 0);
-
-	printf("Ftp server is running.\n");
-	lfd_listen(pool);
-	printf("Ftp server is not running any more.\n");
-	apr_pool_destroy(pool);
+	printf("Ftp server preparing to accept client connections.\n");
+	lfd_listen(root_pool);
+	printf("Ftp server is not running any more. Client connections will be obliterated.\n");
 #ifdef LKL_FILE_APIS
-#define	LINUX_REBOOT_MAGIC1	0xfee1dead
-#define	LINUX_REBOOT_MAGIC2	672274793
-#define	LINUX_REBOOT_CMD_POWER_OFF	0x4321FEDC
+	#define	LINUX_REBOOT_MAGIC1		0xfee1dead
+	#define	LINUX_REBOOT_MAGIC2		672274793
+	#define	LINUX_REBOOT_CMD_POWER_OFF	0x4321FEDC
+	//nothing gets past this exit call; This is a hack currently used to stop the kernel from issuing a kernel panic.
 	exit(0);
 	sys_reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_POWER_OFF, NULL);
 #endif
 }
 
+
 int main(int argc, char const *const * argv, char const *const * engv)
 {
-	apr_status_t rc;
+	apr_status_t	  rc;
+
 	rc = apr_app_initialize(&argc, &argv, &engv);
 	if(APR_SUCCESS != rc)
 	{
@@ -209,17 +198,46 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	}
 	atexit(apr_terminate);
 
+	rc = apr_pool_create(&root_pool, NULL);
+	if(APR_SUCCESS != rc)
+	{
+		lfd_log(LFD_ERROR, "main's apr_pool_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+		return 2;
+	}
+	rc = lfd_config(root_pool);
+	if(APR_SUCCESS != rc)
+	{
+		lfd_log(LFD_ERROR, "Config file wrong. Exiting");
+		return 3;
+	}
+
+	apr_atomic_init(root_pool);
+	apr_atomic_set32(&ftp_must_exit, 0);
+
+	apr_signal(SIGTERM, sig_func);
+	apr_signal(SIGKILL, sig_func);
+	apr_signal(SIGHUP,  sig_func);
+	apr_signal(SIGINT,  sig_func);
+
+
+
 #ifndef LKL_FILE_APIS
 	ftpd_main();
-#else
-	apr_pool_create(&root_pool, NULL);
-	apr_thread_mutex_create(&kth_mutex,APR_THREAD_MUTEX_DEFAULT,root_pool);
-        apr_thread_mutex_lock(kth_mutex);
+#else //LKL_FILE_APIS
+	rc = apr_pool_create(&lkl_thread_creator_pool, root_pool);
+	if(APR_SUCCESS != rc)
+	{
+		lfd_log(LFD_ERROR, "main: apr_pool_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+	}
+
+	apr_thread_mutex_create(&kth_mutex, APR_THREAD_MUTEX_DEFAULT, lkl_thread_creator_pool);
+	apr_thread_mutex_lock(kth_mutex);
 
 	start_kernel();
 
 	apr_thread_mutex_destroy(kth_mutex);
+	apr_pool_destroy(lkl_thread_creator_pool);
 	apr_pool_destroy(root_pool);
-#endif
+#endif //LKL_FILE_APIS
 	return 0;
 }

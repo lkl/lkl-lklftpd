@@ -19,7 +19,7 @@ struct kernel_thread_helper_arg {
 };
 
 extern apr_thread_mutex_t *kth_mutex;
-extern apr_pool_t * root_pool;
+extern apr_pool_t * lkl_thread_creator_pool;
 
 int private_thread_info_size(void);
 void private_thread_info_init(void *arg);
