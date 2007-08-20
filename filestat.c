@@ -95,7 +95,7 @@ static apr_filetype_e filetype_from_mode(mode_t mode)
 		case S_IFFIFO:
 			type = APR_PIPE; break;
 #endif
-#if !defined(BEOS) && defined(S_IFSOCK)
+#if defined(S_IFSOCK)
 		case S_IFSOCK:
 			type = APR_SOCK; break;
 #endif
@@ -105,7 +105,7 @@ static apr_filetype_e filetype_from_mode(mode_t mode)
 				type = APR_PIPE;
 			} else
 #endif
-#if !defined(BEOS) && !defined(S_IFSOCK) && defined(S_ISSOCK)
+#if !defined(S_IFSOCK) && defined(S_ISSOCK)
 				if (S_ISSOCK(mode)) {
 					type = APR_SOCK;
 				} else
@@ -254,7 +254,6 @@ apr_status_t lkl_file_mtime_set(const char *fname, apr_time_t mtime,
 	if (status)
 		return status;
 
-	#ifdef HAVE_UTIMES
 	{
 		struct timeval tvp[2];
 
@@ -267,21 +266,6 @@ apr_status_t lkl_file_mtime_set(const char *fname, apr_time_t mtime,
 		if (status)
 			return status;
 	}
-	#elif defined(HAVE_UTIME)
-	{
-		struct utimbuf buf;
-
-		buf.actime = (time_t) (finfo.atime / APR_USEC_PER_SEC);
-		buf.modtime = (time_t) (mtime / APR_USEC_PER_SEC);
-
-		status = sys_utime(fname, &buf);
-		if (status)
-			return status;
-	}
-	#else
-		return APR_ENOTIMPL;
-	#endif
-
 	return APR_SUCCESS;
 }
 
@@ -305,21 +289,6 @@ apr_status_t lkl_stat(apr_finfo_t *finfo,const char *fname, apr_int32_t wanted, 
 			wanted &= ~APR_FINFO_LINK;
 		return (wanted & ~finfo->valid) ? APR_INCOMPLETE : APR_SUCCESS;
 	}
-/*	else
-	{
-#if !defined(ENOENT) || !defined(ENOTDIR)
-#if !defined(ENOENT)
-	return APR_ENOENT;
-#else
-	if ((-srv) != ENOENT)
-		return APR_ENOENT;
-	else
-		return -srv;
-#endif
-#else
-	return -srv;
-#endif
-	} */
 	return -srv;
 }
 
