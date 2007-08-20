@@ -1108,12 +1108,12 @@ apr_status_t handle_stou(struct lfd_sess *sess)
 
 static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** p_dest)
 {
-	apr_dir_t	* dir;
+	lkl_dir_t	* dir;
 	apr_finfo_t	  finfo;
 	apr_status_t	  apr_err;
 	apr_int32_t	  flags = APR_FINFO_TYPE | APR_FINFO_NAME | APR_FINFO_SIZE;
 
-	apr_err = apr_dir_open(&dir, directory, pool);
+	apr_err = lkl_dir_open(&dir, directory, pool);
 	if(APR_SUCCESS != apr_err)
 	{
 		*p_dest = FTP_ENDCOMMAND_SEQUENCE;
@@ -1124,15 +1124,15 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 		*p_dest = "";
 	}
 
-	for(apr_err = apr_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS;
-		   apr_err = apr_dir_read(&finfo, flags, dir))
+	for(apr_err = lkl_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS;
+		   apr_err = lkl_dir_read(&finfo, flags, dir))
 	{
 		if(finfo.filetype == APR_DIR && ((finfo.name[0] == '.' && finfo.name[1] == '\0') ||
 				 ( finfo.name[1] == '.' && finfo.name[2] == '\0')))
 			continue;
 		*p_dest = apr_pstrcat(pool, *p_dest, finfo.name, FTP_ENDCOMMAND_SEQUENCE, NULL);
 	}
-	apr_dir_close(dir);
+	lkl_dir_close(dir);
 	return APR_SUCCESS;
 }
 
