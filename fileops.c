@@ -136,7 +136,7 @@ apr_status_t lkl_file_open(lkl_file_t **new, const char *fname,
 	}
 	#endif
 
-	#if APR_HAS_LARGE_FILES && defined(_LARGEFILE64_SOURCE)
+	#if defined(_LARGEFILE64_SOURCE)
 	oflags |= O_LARGEFILE;
 	#elif defined(O_LARGEFILE)
 	if (flag & APR_LARGEFILE)
