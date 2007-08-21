@@ -58,10 +58,8 @@ static apr_status_t file_cleanup(lkl_file_t *file)
 		file->filedes = -1;
 		if (file->flags & APR_DELONCLOSE)
 			sys_unlink(file->fname);
-	#if APR_HAS_THREADS
 		if (file->thlock)
 			rv = apr_thread_mutex_destroy(file->thlock);
-	#endif
 	}
 	else
 		rv = -ret;
@@ -94,10 +92,8 @@ apr_status_t lkl_file_open(lkl_file_t **new, const char *fname,
 {
 	int fd;
 	int oflags = 0;
-#if APR_HAS_THREADS
 	apr_thread_mutex_t *thlock;
 	apr_status_t rv;
-#endif
 
 	if ((flag & APR_READ) && (flag & APR_WRITE))
 	{
@@ -149,7 +145,6 @@ apr_status_t lkl_file_open(lkl_file_t **new, const char *fname,
 	}
 	#endif
 
-	#if APR_HAS_THREADS
 	if ((flag & APR_BUFFERED) && (flag & APR_XTHREAD))
 	{
 		rv = apr_thread_mutex_create(&thlock,
@@ -157,7 +152,6 @@ apr_status_t lkl_file_open(lkl_file_t **new, const char *fname,
 		if (rv)
 			return rv;
 	}
-	#endif
 
 	if (perm == APR_OS_DEFAULT)
 	{
@@ -183,12 +177,10 @@ apr_status_t lkl_file_open(lkl_file_t **new, const char *fname,
 	if ((*new)->buffered)
 	{
 		(*new)->buffer = apr_palloc(pool, APR_FILE_BUFSIZE);
-	#if APR_HAS_THREADS
 		if ((*new)->flags & APR_XTHREAD)
 		{
 			(*new)->thlock = thlock;
 		}
-	#endif
 	}
 	else
 		(*new)->buffer = NULL;

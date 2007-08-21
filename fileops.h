@@ -89,9 +89,7 @@ struct lkl_file_t
 	unsigned long dataRead;   /* amount of valid data read into buffer */
 	int direction;            /* buffer being used for 0 = read, 1 = write */
 	apr_off_t filePtr;        /* position in file of handle */
-#if APR_HAS_THREADS
 	struct apr_thread_mutex_t *thlock;
-#endif
 };
 
 typedef struct lkl_file_t lkl_file_t;
@@ -108,7 +106,6 @@ struct lkl_dir_t
 };
 typedef struct lkl_dir_t lkl_dir_t;
 
-#if APR_HAS_THREADS
 #define file_lock(f)   do { \
                            if ((f)->thlock) \
                                apr_thread_mutex_lock((f)->thlock); \
@@ -117,10 +114,6 @@ typedef struct lkl_dir_t lkl_dir_t;
                            if ((f)->thlock) \
                                apr_thread_mutex_unlock((f)->thlock); \
                        } while (0)
-#else
-#define file_lock(f)   do {} while (0)
-#define file_unlock(f) do {} while (0)
-#endif
 
 apr_fileperms_t lkl_unix_mode2perms(mode_t mode);
 mode_t lkl_unix_perms2mode(apr_fileperms_t perms);
