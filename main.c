@@ -37,28 +37,6 @@ void ftpd_main(void);
 #include <linux/fs.h>
 #include "lkl_thread.h"
 
-unsigned long irqs_enabled=0;
-
-unsigned long __local_save_flags(void)
-{
-        return irqs_enabled;
-}
-
-void __local_irq_restore(unsigned long flags)
-{
-        irqs_enabled=flags;
-}
-
-void local_irq_enable(void)
-{
-        irqs_enabled=1;
-}
-
-void local_irq_disable(void)
-{
-        irqs_enabled=0;
-}
-
 void show_mem(void)
 {
 }
