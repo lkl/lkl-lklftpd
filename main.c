@@ -8,6 +8,7 @@
 #include <apr_general.h>
 #include <apr_errno.h>
 #include <apr_atomic.h>
+#include <apr_getopt.h>
 
 #include "sys_declarations.h"
 #include "utils.h"
@@ -167,6 +168,54 @@ void ftpd_main(void)
 #endif
 }
 
+static const apr_getopt_option_t opt_option[] = {
+	/* long-option, short-option, has-arg flag, description */
+	{ "port", 'p', TRUE, "port to listen on" },      
+	{ "help", 'h', 0, "display this help and exit" },      
+	{ NULL, 0, 0, NULL }, 
+};
+
+void show_help(const char *name)
+{
+	const struct apr_getopt_option_t *i=opt_option;
+
+	printf("Usage: %s [ OPTIONS ] \n\n", name);
+	while (i->name) {
+		printf(" -%c, --%s \t %s\n", (char)i->optch, i->name, i->description);
+		i++;
+	}
+	printf("\nReport bugs to lkl-dev@ixlabs.cs.pub.ro\n");
+	exit(0);
+}
+
+static int parse_command_line(int argc, char const *const * argv)
+{
+	int rv, optch;
+	const char *optarg;
+
+	apr_getopt_t *opt;
+
+	apr_getopt_init(&opt, root_pool, argc, argv);
+
+	while ((rv = apr_getopt_long(opt, opt_option, &optch, &optarg)) == APR_SUCCESS) {
+		switch (optch) {
+		case 'p':
+			lfd_config_listen_port=atoi(optarg);
+			lfd_config_data_port=0;
+			break;
+		case 'h':
+			show_help(argv[0]);
+			break;
+		}
+	}
+
+	if (rv != APR_EOF) {
+		printf("Try `%s --help` for more information.\n", argv[0]);
+		return -1;
+	}
+	
+	return 0;
+}
 
 int main(int argc, char const *const * argv, char const *const * engv)
 {
@@ -186,11 +235,15 @@ int main(int argc, char const *const * argv, char const *const * engv)
 		lfd_log(LFD_ERROR, "main's apr_pool_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
 		return 2;
 	}
+
+	if (parse_command_line(argc, argv) != 0)
+		return 3;
+
 	rc = lfd_config(root_pool);
 	if(APR_SUCCESS != rc)
 	{
 		lfd_log(LFD_ERROR, "Config file wrong. Exiting");
-		return 3;
+		return 4;
 	}
 
 	apr_atomic_init(root_pool);
