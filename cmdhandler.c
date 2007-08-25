@@ -43,7 +43,7 @@ apr_status_t handle_passive(struct lfd_sess * sess)
 	{
 		return rc;
 	}
-	rc = apr_socket_create(&listen_fd, saddr->family, APR_UNSPEC, APR_PROTO_TCP, sess->sess_pool);
+	rc = apr_socket_create(&listen_fd, saddr->family, SOCK_STREAM, APR_PROTO_TCP, sess->sess_pool);
 	if(APR_SUCCESS != rc)
 	{
 		return rc;
@@ -1106,7 +1106,7 @@ apr_status_t handle_stou(struct lfd_sess *sess)
 }
 
 
-static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** p_dest)
+static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** p_dest, int la)
 {
 	lkl_dir_t	* dir;
 	apr_finfo_t	  finfo;
@@ -1127,10 +1127,34 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 	for(apr_err = lkl_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS;
 		   apr_err = lkl_dir_read(&finfo, flags, dir))
 	{
-		if(finfo.filetype == APR_DIR && ((finfo.name[0] == '.' && finfo.name[1] == '\0') ||
-				 ( finfo.name[1] == '.' && finfo.name[2] == '\0')))
+		char buffer[1024];
+
+		if(finfo.filetype == APR_DIR && ((finfo.name[0] == '.' && finfo.name[1] == '\0')))
 			continue;
-		*p_dest = apr_pstrcat(pool, *p_dest, finfo.name, FTP_ENDCOMMAND_SEQUENCE, NULL);
+		if (!la && finfo.name[1] == '.' && finfo.name[2] == '\0')
+			continue;
+
+		if (la)
+			snprintf(buffer, sizeof(buffer), "%c%c%c%c%c%c%c%c%c%c ftp ftp %d Jul 6 6 %s\n", 
+				 (finfo.filetype == APR_DIR)?'d':'-', 
+				 /* user permission */
+				 (finfo.protection&00400)?'r':'-',
+				 (finfo.protection&00200)?'w':'-',
+				 (finfo.protection&00100)?'x':'-',
+				 /* group permission */
+				 (finfo.protection&00040)?'r':'-',
+				 (finfo.protection&00020)?'w':'-',
+				 (finfo.protection&00010)?'x':'-',
+				 /* others permission */
+				 (finfo.protection&00004)?'r':'-',
+				 (finfo.protection&00002)?'w':'-',
+				 (finfo.protection&00001)?'x':'-',
+				 
+				 (int)finfo.size, finfo.name);
+		else
+			snprintf(buffer, sizeof(buffer), "%s%s", finfo.name,
+				 (finfo.filetype == APR_DIR)?"/":"");
+		*p_dest = apr_pstrcat(pool, *p_dest, buffer, FTP_ENDCOMMAND_SEQUENCE, NULL);
 	}
 	lkl_dir_close(dir);
 	return APR_SUCCESS;
@@ -1144,10 +1168,13 @@ apr_status_t handle_list(struct lfd_sess *p_sess)
 	apr_size_t		  file_list_len, bytes_written;
 	char			* file_list;
 	char			* path;
+	int la=0;
 
 	// if the arg was NULL, take the current directory
-	if(NULL == p_sess->ftp_arg_str)
+	if(NULL == p_sess->ftp_arg_str || strcmp(p_sess->ftp_arg_str, "-la") == 0)
 	{
+		if (p_sess->ftp_arg_str != NULL)
+			la=1;
 		if('/' == *p_sess->rel_path)
 			path = apr_pstrcat(p_sess->loop_pool, p_sess->rel_path, NULL);
 		else
@@ -1160,8 +1187,7 @@ apr_status_t handle_list(struct lfd_sess *p_sess)
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
-
-	ret = list_dir(path, p_sess->loop_pool, &file_list);
+	ret = list_dir(path, p_sess->loop_pool, &file_list, la);
 	if(APR_SUCCESS != ret)
 	{
 		lfd_log(LFD_ERROR, "list_dir failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
