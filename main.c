@@ -126,7 +126,7 @@ int kernel_execve(const char *filename, char *const argv[], char *const envp[])
 
 #endif
 
-        if (strcmp(filename, "/bin/init") == 0)
+        if (0 == strcmp(filename, "/bin/init"))
 	{
 		int err = 0;
 		// remount the file system with write access
@@ -181,7 +181,8 @@ void show_help(const char *name)
 	const struct apr_getopt_option_t *i=opt_option;
 
 	printf("Usage: %s [ OPTIONS ] \n\n", name);
-	while (i->name) {
+	while (i->name)
+	{
 		printf(" -%c, --%s \t %s\n", (char)i->optch, i->name, i->description);
 		i++;
 	}
@@ -198,8 +199,10 @@ static int parse_command_line(int argc, char const *const * argv)
 
 	apr_getopt_init(&opt, root_pool, argc, argv);
 
-	while ((rv = apr_getopt_long(opt, opt_option, &optch, &optarg)) == APR_SUCCESS) {
-		switch (optch) {
+	while (APR_SUCCESS == (rv = apr_getopt_long(opt, opt_option, &optch, &optarg)))
+	{
+		switch (optch)
+		{
 		case 'p':
 			lfd_config_listen_port=atoi(optarg);
 			lfd_config_data_port=0;
@@ -210,7 +213,8 @@ static int parse_command_line(int argc, char const *const * argv)
 		}
 	}
 
-	if (rv != APR_EOF) {
+	if (APR_EOF != rv)
+	{
 		printf("Try `%s --help` for more information.\n", argv[0]);
 		return -1;
 	}
