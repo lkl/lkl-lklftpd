@@ -147,7 +147,7 @@ static void sig_func(int sigid)
 	// this flag is periodically checked by the loop that accepts client connections.
 	// if it sees it set it will stop receiving connections and begin a teardown of the kernel.
 	printf("a shutdown signal of value [%d] was received\n", sigid);
-	//apr_atomic_set32(&ftp_must_exit, 1);
+	apr_atomic_set32(&ftp_must_exit, 1);
 }
 
 apr_pool_t	* root_pool;
