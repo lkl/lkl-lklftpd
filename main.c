@@ -146,7 +146,8 @@ static void sig_func(int sigid)
 	//whenever a "shutdown" signal is received (CTRL+C, SIGHUP, etc.) we set the ftp_must_exit flag.
 	// this flag is periodically checked by the loop that accepts client connections.
 	// if it sees it set it will stop receiving connections and begin a teardown of the kernel.
-	apr_atomic_set32(&ftp_must_exit, 1);
+	printf("a shutdown signal of value [%d] was received\n", sigid);
+	//apr_atomic_set32(&ftp_must_exit, 1);
 }
 
 apr_pool_t	* root_pool;
@@ -170,9 +171,9 @@ void ftpd_main(void)
 
 static const apr_getopt_option_t opt_option[] = {
 	/* long-option, short-option, has-arg flag, description */
-	{ "port", 'p', TRUE, "port to listen on" },      
-	{ "help", 'h', 0, "display this help and exit" },      
-	{ NULL, 0, 0, NULL }, 
+	{ "port", 'p', TRUE, "port to listen on" },
+	{ "help", 'h', 0, "display this help and exit" },
+	{ NULL, 0, 0, NULL },
 };
 
 void show_help(const char *name)
@@ -213,7 +214,7 @@ static int parse_command_line(int argc, char const *const * argv)
 		printf("Try `%s --help` for more information.\n", argv[0]);
 		return -1;
 	}
-	
+
 	return 0;
 }
 

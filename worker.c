@@ -45,7 +45,7 @@ static apr_status_t get_username_password(struct lfd_sess* p_sess)
 
 	do
 	{
-		rc = lfd_cmdio_get_cmd_and_arg(p_sess, &p_sess->ftp_cmd_str, &p_sess->ftp_arg_str, 1);
+		rc = lfd_cmdio_get_cmd_and_arg(p_sess, &p_sess->ftp_cmd_str, &p_sess->ftp_arg_str);
 		if(APR_SUCCESS != rc)
 			return rc;
 
@@ -62,7 +62,7 @@ static apr_status_t get_username_password(struct lfd_sess* p_sess)
 
 		lfd_cmdio_write(p_sess, FTP_GIVEPWORD, "Password required for user.");
 
-		rc = lfd_cmdio_get_cmd_and_arg(p_sess, &p_sess->ftp_cmd_str, &p_sess->ftp_arg_str, 1);
+		rc = lfd_cmdio_get_cmd_and_arg(p_sess, &p_sess->ftp_cmd_str, &p_sess->ftp_arg_str);
 		if(APR_SUCCESS != rc)
 			return rc;
 
@@ -108,7 +108,7 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 	while(APR_SUCCESS == rc)
 	{
 		apr_pool_clear(sess->loop_pool);
-		rc = lfd_cmdio_get_cmd_and_arg(sess, &sess->ftp_cmd_str, &sess->ftp_arg_str, 1);
+		rc = lfd_cmdio_get_cmd_and_arg(sess, &sess->ftp_cmd_str, &sess->ftp_arg_str);
 		if(APR_SUCCESS != rc)
 			return rc;
 		// special case

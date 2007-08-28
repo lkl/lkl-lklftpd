@@ -1,7 +1,7 @@
 #include "sess.h"
 #include "utils.h"
 
-const size_t cmd_input_buffer_len = 100;
+const apr_size_t cmd_input_buffer_len = 100;
 
 apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, apr_socket_t * sock)
 {

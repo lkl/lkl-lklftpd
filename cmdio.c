@@ -48,7 +48,7 @@ apr_status_t lfd_cmdio_write(struct lfd_sess * sess, int cmd, const char *msg, .
 	return rc;
 }
 
-apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str, char** p_arg_str, int set_alarm)
+apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str, char** p_arg_str)
 {
 	apr_status_t		  ret;
 	char			* buffer;
@@ -83,7 +83,7 @@ apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str
 	}
 	else
 	{
-		ret=APR_INCOMPLETE;
+		ret = APR_INCOMPLETE;
 	}
 	*p_cmd_str = cmd_body;
 	*p_arg_str = cmd_arg;

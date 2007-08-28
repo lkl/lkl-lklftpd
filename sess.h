@@ -41,7 +41,7 @@ struct lfd_sess
 	apr_off_t		  restart_pos;			//REST value.
 	int 			  is_ascii;			//current mode is ASCII.
 };
-extern const size_t cmd_input_buffer_len;	//length of lfd_sess.cmd_input_buffer
+extern const apr_size_t cmd_input_buffer_len;	//length of lfd_sess.cmd_input_buffer
 
 apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, apr_socket_t * sock);
 void lfd_sess_destroy(struct lfd_sess *sess);
