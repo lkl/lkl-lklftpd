@@ -45,8 +45,6 @@ static apr_status_t get_username_password(struct lfd_sess* p_sess)
 
 	do
 	{
-		nr_tries ++;
-
 		rc = lfd_cmdio_get_cmd_and_arg(p_sess, &p_sess->ftp_cmd_str, &p_sess->ftp_arg_str, 1);
 		if(APR_SUCCESS != rc)
 			return rc;
@@ -81,8 +79,10 @@ static apr_status_t get_username_password(struct lfd_sess* p_sess)
 		{
 			// unknown command; send error message
 			lfd_cmdio_write(p_sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
+			continue;
 		}
 
+		nr_tries ++;
 		lfd_cmdio_write(p_sess, FTP_LOGINERR, "Incorrect login credentials.");
 	}
 	while(nr_tries < lfd_config_max_login_attempts);
