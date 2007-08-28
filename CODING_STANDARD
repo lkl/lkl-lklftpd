@@ -1,0 +1,12 @@
+a few rules we're using:
+1.	"(0 == rc)" instead of the usual "(rc == 0)"
+	All equality and inequality related comparisons are done in this style.
+	VAR == CONST is prone to the VAR = CONST type of error.
+	CONST = VAR will be signaled by the compiler.
+	Same goes for !=, to have some consistency.
+	
+2. 	Verify return codes of every thing.
+
+3.	Use only portable APR functions if possible. Anything platform specific should be contained within 
+	a function call. All platform specific functions should be located in platform-specific	source files. 
+	At compile time, the build system will choose the appropriate platform specific file and use it.
