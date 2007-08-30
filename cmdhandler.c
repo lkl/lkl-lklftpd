@@ -1134,8 +1134,21 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 		if (!la && finfo.name[1] == '.' && finfo.name[2] == '\0')
 			continue;
 
-		if (la)
-			snprintf(buffer, sizeof(buffer), "%c%c%c%c%c%c%c%c%c%c ftp ftp %d Jul 6 6 %s\n", 
+		if (la) {
+			char time_string[3+1+2+1+5+1];
+			const char *time_fmt;
+			apr_time_exp_t exp_time, exp_now;
+			apr_size_t dummy;
+
+			apr_time_exp_lt(&exp_time, finfo.mtime);
+			apr_time_exp_lt(&exp_now, apr_time_now());
+			if (exp_now.tm_year == exp_time.tm_year)
+				time_fmt="%b %d %H:%M";
+			else
+				time_fmt="%b %d %Y";
+			apr_strftime(time_string, &dummy, sizeof(time_string), time_fmt, &exp_time);
+
+			snprintf(buffer, sizeof(buffer), "%c%c%c%c%c%c%c%c%c%c ftp ftp %d %s %s\n", 
 				 (finfo.filetype == APR_DIR)?'d':'-', 
 				 /* user permission */
 				 (finfo.protection&00400)?'r':'-',
@@ -1149,9 +1162,8 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 				 (finfo.protection&00004)?'r':'-',
 				 (finfo.protection&00002)?'w':'-',
 				 (finfo.protection&00001)?'x':'-',
-				 
-				 (int)finfo.size, finfo.name);
-		else
+				 (int)finfo.size, time_string, finfo.name);
+		} else
 			snprintf(buffer, sizeof(buffer), "%s%s", finfo.name,
 				 (finfo.filetype == APR_DIR)?"/":"");
 		*p_dest = apr_pstrcat(pool, *p_dest, buffer, FTP_ENDCOMMAND_SEQUENCE, NULL);
