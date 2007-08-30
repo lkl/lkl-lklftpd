@@ -94,7 +94,6 @@ void lfd_listen(apr_pool_t * mp)
 		lfd_log(LFD_ERROR, "lfd_listen: could not create listen socket");
 		return;
 	}
-	create_pollfd_from_socket(&pfd, listen_sock, mp);
 
 	rc = apr_threadattr_create(&thattr, mp);
 	if(APR_SUCCESS != rc)
@@ -117,8 +116,10 @@ void lfd_listen(apr_pool_t * mp)
 			}
 		}
 
+		create_pollfd_from_socket(&pfd, listen_sock, mp);
+
 		rc = apr_poll(&pfd, 1, &nsds, timeout);
-		if((APR_SUCCESS != rc) && (APR_TIMEUP != rc))
+		if((APR_SUCCESS != rc) && (!APR_STATUS_IS_TIMEUP(rc)) && (!APR_STATUS_IS_EINTR(rc)))
 		{
 			//break - an unrecoverable error occured
 			lfd_log(LFD_ERROR, "lfd_listen: apr_poll failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
@@ -130,7 +131,7 @@ void lfd_listen(apr_pool_t * mp)
 			//if the flag says we must exit, we comply, so bye bye!
 			return;
 		}
-		if((APR_TIMEUP == rc) || (APR_POLLIN != pfd.rtnevents))
+		if(APR_STATUS_IS_TIMEUP(rc) || APR_STATUS_IS_EINTR(rc) || (APR_POLLIN != pfd.rtnevents))
 		{
 			continue;
 		}
