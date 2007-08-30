@@ -1,6 +1,5 @@
 // implement the main() + config, pass control to listener
-//#include <stdlib.h>
-//#include <stdio.h>
+#include <stdlib.h>
 
 #include <apr.h>
 #include <apr_pools.h>
