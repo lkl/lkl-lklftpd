@@ -24,7 +24,7 @@ extern apr_pool_t * lkl_thread_creator_pool;
 int private_thread_info_size(void);
 void private_thread_info_init(void *arg);
 void _switch_to(void *prev, void *next);
-void* kernel_thread_helper(apr_thread_t * aprth, void *arg);
+void* APR_THREAD_FUNC kernel_thread_helper(apr_thread_t * aprth, void *arg);
 void destroy_thread(void *arg);
 int _copy_thread(int (*fn)(void*), void *arg, void *pti);
 void cpu_wait_events(void);

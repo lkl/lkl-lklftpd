@@ -240,7 +240,7 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 	return rc;
 }
 
-void * lfd_worker_protocol_main(apr_thread_t * thd, void* param)
+void * APR_THREAD_FUNC lfd_worker_protocol_main(apr_thread_t * thd, void* param)
 {
 	apr_status_t	rc;
 	apr_socket_t 	* sock = (apr_socket_t*) param;

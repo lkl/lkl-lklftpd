@@ -2,6 +2,7 @@
 #define LKLFTD__SYS_DECLARATIONS__H__
 
 #include <sys/types.h>
+#include <sys/time.h>
 
 #define asmlinkage
 #define __user

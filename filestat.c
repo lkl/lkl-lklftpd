@@ -80,7 +80,8 @@ mode_t lkl_unix_perms2mode(apr_fileperms_t perms)
 static apr_filetype_e filetype_from_mode(mode_t mode)
 {
 	apr_filetype_e type;
-	switch (mode & S_IFMT) {
+	switch (mode & S_IFMT) 
+	{
 		case S_IFREG:
 			type = APR_REG; break;
 		case S_IFDIR:
@@ -91,30 +92,24 @@ static apr_filetype_e filetype_from_mode(mode_t mode)
 			type = APR_CHR; break;
 		case S_IFBLK:
 			type = APR_BLK; break;
-#if defined(S_IFFIFO)
-		case S_IFFIFO:
-			type = APR_PIPE; break;
-#endif
-#if defined(S_IFSOCK)
 		case S_IFSOCK:
 			type = APR_SOCK; break;
-#endif
 	default:
-#if !defined(S_IFFIFO) && defined(S_ISFIFO)
-			if (S_ISFIFO(mode)) {
-				type = APR_PIPE;
-			} else
-#endif
-#if !defined(S_IFSOCK) && defined(S_ISSOCK)
-				if (S_ISSOCK(mode)) {
-					type = APR_SOCK;
-				} else
-#endif
-					type = APR_UNKFILE;
+		if (S_ISFIFO(mode)) 
+		{
+			type = APR_PIPE;
+		} 
+		else if (S_ISSOCK(mode)) 
+		{
+			type = APR_SOCK;
+		}
+	 else
+		type = APR_UNKFILE;
 	}
-
+	
 	return type;
 }
+
 
 static void fill_out_finfo(apr_finfo_t *finfo, struct stat *info,apr_int32_t wanted)
 {
@@ -122,15 +117,16 @@ static void fill_out_finfo(apr_finfo_t *finfo, struct stat *info,apr_int32_t wan
 			| APR_FINFO_OWNER | APR_FINFO_PROT;
 	finfo->protection = lkl_unix_mode2perms(info->st_mode);
 	finfo->filetype = filetype_from_mode(info->st_mode);
-	finfo->user = info->st_uid;
-	finfo->group = info->st_gid;
+	// we don't need this for now
+	//finfo->user = info->st_uid;
+	//finfo->group = info->st_gid;
 	finfo->size = info->st_size;
 	finfo->inode = info->st_ino;
 	finfo->device = info->st_dev;
 	finfo->nlink = info->st_nlink;
-	apr_time_ansi_put(&finfo->atime, info->st_atime);
-	apr_time_ansi_put(&finfo->mtime, info->st_mtime);
-	apr_time_ansi_put(&finfo->ctime, info->st_ctime);
+	finfo->atime = (apr_time_t) info->st_atime * APR_USEC_PER_SEC;
+	finfo->mtime = (apr_time_t) info->st_mtime * APR_USEC_PER_SEC;
+	finfo->ctime = (apr_time_t) info->st_ctime * APR_USEC_PER_SEC;
 }
 
 apr_status_t lkl_file_info_get_locked(apr_finfo_t *finfo, apr_int32_t wanted,

@@ -77,18 +77,18 @@ void _mem_init(unsigned long *phys_mem, unsigned long *phys_mem_size)
         *phys_mem=(unsigned long) memalign(4096, *phys_mem_size);
 }
 
-int _sbull_open(void)
+FILE* _sbull_open(void)
 {
-	int fd;
-        fd=open("disk", O_RDWR);
-
-	return fd;
+        FILE *f=fopen("disk", "r+b");
+	assert(f != NULL);
+	return f;
 }
 
 unsigned long _sbull_sectors(void)
 {
         unsigned long sectors;
         int fd=open("disk", O_RDONLY);
+
 
         assert(fd > 0);
         sectors=(lseek64(fd, 0, SEEK_END)/512);
@@ -97,15 +97,17 @@ unsigned long _sbull_sectors(void)
         return sectors;
 }
 
-void _sbull_transfer(int fd, unsigned long sector, unsigned long nsect, char *buffer, int dir)
+void _sbull_transfer(FILE *f, unsigned long sector, unsigned long nsect, char *buffer, int dir)
 {
-	assert(lseek64(fd, sector*512, SEEK_SET) >= 0);
-
+	int x;
+        x=fseek(f, sector*512, SEEK_SET);
+	assert(x == 0);
         if (dir)
-                assert(write(fd, buffer, nsect*512) == nsect*512);
+                x=fwrite(buffer, 512, nsect, f);
         else
-                assert(read(fd, buffer, nsect*512) == nsect*512);
-
+                x=fread(buffer, 512, nsect, f);
+	
+	assert(x == nsect);
 }
 
 extern void start_kernel(void);
@@ -269,7 +271,7 @@ int main(int argc, char const *const * argv, char const *const * engv)
 		lfd_log(LFD_ERROR, "main: apr_pool_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
 	}
 
-	apr_thread_mutex_create(&kth_mutex, APR_THREAD_MUTEX_DEFAULT, lkl_thread_creator_pool);
+	apr_thread_mutex_create(&kth_mutex, APR_THREAD_MUTEX_UNNESTED, lkl_thread_creator_pool);
 	apr_thread_mutex_lock(kth_mutex);
 
 	start_kernel();

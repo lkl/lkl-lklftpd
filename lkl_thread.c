@@ -14,7 +14,7 @@ void private_thread_info_init(void *arg)
 {
         struct _thread_info *pti=(struct _thread_info*)arg;
 
-	apr_thread_mutex_create(&pti->sched_mutex, APR_THREAD_MUTEX_DEFAULT, lkl_thread_creator_pool);
+	apr_thread_mutex_create(&pti->sched_mutex, APR_THREAD_MUTEX_UNNESTED, lkl_thread_creator_pool);
         apr_thread_mutex_lock(pti->sched_mutex);
 }
 
@@ -27,7 +27,7 @@ void _switch_to(void *prev, void *next)
         apr_thread_mutex_lock(_prev->sched_mutex);
 }
 
-void* kernel_thread_helper(apr_thread_t * aprth, void *arg)
+void* APR_THREAD_FUNC kernel_thread_helper(apr_thread_t * aprth, void *arg)
 {
         struct kernel_thread_helper_arg *ktha=(struct kernel_thread_helper_arg*)arg;
         int (*fn)(void*)=ktha->fn;
@@ -59,7 +59,7 @@ int _copy_thread(int (*fn)(void*), void *arg, void *pti)
         };
         int ret;
 
-	ret=apr_thread_create(&ktha.pti->th, NULL, kernel_thread_helper, &ktha, lkl_thread_creator_pool);
+	ret=apr_thread_create(&ktha.pti->th, NULL, &kernel_thread_helper, &ktha, lkl_thread_creator_pool);
         apr_thread_mutex_lock(kth_mutex);
         return ret;
 }
