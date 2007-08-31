@@ -60,34 +60,6 @@ apr_status_t lkl_dir_remove(const char *path, apr_pool_t *pool)
 	return -ret;
 }
 
-#ifdef DIRENT_TYPE
-static apr_filetype_e filetype_from_dirent_type(int type)
-{
-	switch (type)
-	{
-		case DT_REG:
-			return APR_REG;
-		case DT_DIR:
-			return APR_DIR;
-		case DT_LNK:
-			return APR_LNK;
-		case DT_CHR:
-			return APR_CHR;
-		case DT_BLK:
-			return APR_BLK;
-#if defined(DT_FIFO)
-		case DT_FIFO:
-			return APR_PIPE;
-#endif
-#if !defined(BEOS) && defined(DT_SOCK)
-		case DT_SOCK:
-			return APR_SOCK;
-#endif
-		default:
-			return APR_UNKFILE;
-	}
-}
-#endif
 
 struct dirent * lkl_readdir(lkl_dir_t *thedir)
 {
@@ -112,9 +84,6 @@ apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, lkl_dir_t * t
 {
 
 	apr_status_t ret = 0;
-#ifdef DIRENT_TYPE
-	apr_filetype_e type;
-#endif
 
     // We're about to call a non-thread-safe readdir()
 	thedir->entry = lkl_readdir(thedir);
@@ -128,16 +97,8 @@ apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, lkl_dir_t * t
 		return ret;
 	}
 
-#ifdef DIRENT_TYPE
-	type = filetype_from_dirent_type(thedir->entry->DIRENT_TYPE);
-	if (APR_UNKFILE != type)
-		wanted &= ~APR_FINFO_TYPE;
-#endif
-#ifdef DIRENT_INODE
-	if (thedir->entry->DIRENT_INODE && thedir->entry->DIRENT_INODE != -1)
+	if (thedir->entry->d_ino && thedir->entry->d_ino != -1)
 		wanted &= ~APR_FINFO_INODE;
-
-#endif
 
 	wanted &= ~APR_FINFO_NAME;
 
@@ -166,20 +127,12 @@ apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, lkl_dir_t * t
 
 		finfo->pool = thedir->pool;
 		finfo->valid = 0;
-#ifdef DIRENT_TYPE
-		if (APR_UNKFILE != type)
+
+		if (thedir->entry->d_ino && thedir->entry->d_ino != -1)
 		{
-			finfo->filetype = type;
-			finfo->valid |= APR_FINFO_TYPE;
-		}
-#endif
-#ifdef DIRENT_INODE
-		if (thedir->entry->DIRENT_INODE && thedir->entry->DIRENT_INODE != -1)
-		{
-			finfo->inode = thedir->entry->DIRENT_INODE;
+			finfo->inode = thedir->entry->d_ino;
 			finfo->valid |= APR_FINFO_INODE;
 		}
-#endif
 	}
 
 	finfo->name = apr_pstrdup(thedir->pool, thedir->entry->d_name);
