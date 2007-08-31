@@ -15,6 +15,7 @@
 
 static void port_cleanup(struct lfd_sess* p_sess);
 static void pasv_cleanup(struct lfd_sess* p_sess);
+const unsigned char * lkl_str_parse_uchar_string_sep(char *, char, unsigned char*, unsigned int);
 
 int handle_user_cmd(struct lfd_sess* p_sess)
 {
@@ -35,10 +36,14 @@ apr_status_t handle_passive(struct lfd_sess * sess)
 	apr_socket_t	* listen_fd;
 	apr_sockaddr_t	* saddr;
 
+	unsigned char vals[6];
+	const unsigned char* p_raw;
+	char * addr;
+
 	port_cleanup(sess);
 	pasv_cleanup(sess);
 
-	rc = apr_sockaddr_info_get(&saddr, NULL, APR_UNSPEC, lfd_config_data_port, 0, sess->loop_pool);
+	rc = apr_sockaddr_info_get(&saddr, lfd_config_listen_host, APR_UNSPEC, lfd_config_data_port, 0, sess->loop_pool);
 	if(APR_SUCCESS != rc)
 	{
 		return rc;
@@ -59,6 +64,12 @@ apr_status_t handle_passive(struct lfd_sess * sess)
 		return rc;
 	}
 	sess->pasv_listen_fd = listen_fd;
+
+	apr_sockaddr_ip_get(&addr, saddr);
+	p_raw = lkl_str_parse_uchar_string_sep(addr, '.', vals,4);
+	vals[4] = lfd_config_data_port >> 8;
+	vals[5] = (unsigned char) (lfd_config_data_port & 0xFF);
+	rc = lfd_cmdio_write(sess, FTP_PASVOK,"Entering Passive Mode. %d,%d,%d,%d,%d,%d", vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
 	//TODO:implement
 	return APR_SUCCESS;
 }
