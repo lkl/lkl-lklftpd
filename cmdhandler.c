@@ -810,6 +810,12 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 
 	sess->restart_pos = 0;
 
+	if(NULL == sess->ftp_arg_str)
+	{
+		rc = lfd_cmdio_write(sess, FTP_BADOPTS, "Command must have an argument.");
+		return rc;
+	}	
+
 	if (!data_transfer_checks_ok(sess))
 	{
 		return APR_EINVAL;
@@ -1020,6 +1026,12 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 	struct lfd_transfer_ret   trans_ret;
 
 	sess->restart_pos = 0;
+	
+	if(NULL == sess->ftp_arg_str)
+	{
+		rc = lfd_cmdio_write(sess, FTP_BADOPTS, "Command must have an argument.");
+		return rc;
+	}
 
 	if (!data_transfer_checks_ok(sess))
 	{
