@@ -67,7 +67,7 @@ void get_cmd_line(char **cl)
 
 long _panic_blink(long time)
 {
-        assert(1);
+        assert(0);
         return 0;
 }
 
