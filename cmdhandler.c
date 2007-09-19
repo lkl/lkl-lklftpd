@@ -683,10 +683,6 @@ static apr_status_t lfd_socket_write_full(apr_socket_t * fd, const void* p_buf, 
 	apr_status_t	rc;
 	apr_size_t	num_written;
 	apr_size_t	size = *psize;
-	if (size > INT_MAX)
-	{
-		bug("size too big in vsf_sysutil_write_loop");
-	}
 
 	*psize = 0;
 	while (1)
@@ -814,7 +810,7 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 	{
 		rc = lfd_cmdio_write(sess, FTP_BADOPTS, "Command must have an argument.");
 		return rc;
-	}	
+	}
 
 	if (!data_transfer_checks_ok(sess))
 	{
@@ -1026,7 +1022,7 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 	struct lfd_transfer_ret   trans_ret;
 
 	sess->restart_pos = 0;
-	
+
 	if(NULL == sess->ftp_arg_str)
 	{
 		rc = lfd_cmdio_write(sess, FTP_BADOPTS, "Command must have an argument.");
@@ -1171,8 +1167,8 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 				time_fmt="%b %d %Y";
 			apr_strftime(time_string, &dummy, sizeof(time_string), time_fmt, &exp_time);
 
-			snprintf(buffer, sizeof(buffer), "%c%c%c%c%c%c%c%c%c%c ftp ftp %d %s %s\n", 
-				 (finfo.filetype == APR_DIR)?'d':'-', 
+			snprintf(buffer, sizeof(buffer), "%c%c%c%c%c%c%c%c%c%c ftp ftp %d %s %s\n",
+				 (finfo.filetype == APR_DIR)?'d':'-',
 				 /* user permission */
 				 (finfo.protection&00400)?'r':'-',
 				 (finfo.protection&00200)?'w':'-',

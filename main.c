@@ -1,5 +1,6 @@
 // implement the main() + config, pass control to listener
 #include <stdlib.h>
+#include <signal.h>
 
 #include <apr.h>
 #include <apr_pools.h>
@@ -21,6 +22,8 @@ void ftpd_main(void);
 
 #ifdef LKL_FILE_APIS
 
+#include "include/asm/callbacks.h"
+
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -37,109 +40,40 @@ void ftpd_main(void);
 #include <linux/fs.h>
 #include "lkl_thread.h"
 
-void show_mem(void)
+
+
+
+long linux_panic_blink(long time)
 {
+	assert(0);
+	return 0;
 }
 
-void __udelay(unsigned long usecs)
-{
+static void *_phys_mem;
 
+void linux_mem_init(unsigned long *phys_mem, unsigned long *phys_mem_size)
+{
+	*phys_mem_size=256*1024*1024;
+	*phys_mem=(unsigned long)malloc(*phys_mem_size);
 }
 
-void __ndelay(unsigned long nsecs)
+void linux_halt(void)
 {
-
+	free(_phys_mem);
 }
 
+extern void threads_init(struct linux_native_operations *lnops);
 
-void lkl_console_write(const char *str, unsigned len)
-{
-        write(1, str, len);
-}
-
-extern int sbull_init(void);
-
-void get_cmd_line(char **cl)
-{
-        static char x[] = "root=42:0";
-        *cl=x;
-}
-
-long _panic_blink(long time)
-{
-        assert(0);
-        return 0;
-}
-
-void _mem_init(unsigned long *phys_mem, unsigned long *phys_mem_size)
-{
-        *phys_mem_size=256*1024*1024;
-        *phys_mem=(unsigned long) memalign(4096, *phys_mem_size);
-}
-
-FILE* _sbull_open(void)
-{
-        FILE *f=fopen("disk", "r+b");
-	assert(f != NULL);
-	return f;
-}
-
-unsigned long _sbull_sectors(void)
-{
-        unsigned long sectors;
-        int fd=open("disk", O_RDONLY);
+static struct linux_native_operations lnops = {
+	.panic_blink = linux_panic_blink,
+	.mem_init = linux_mem_init,
+	.main = ftpd_main,
+	.halt = linux_halt
+};
 
 
-        assert(fd > 0);
-        sectors=(lseek64(fd, 0, SEEK_END)/512);
-        close(fd);
 
-        return sectors;
-}
-
-void _sbull_transfer(FILE *f, unsigned long sector, unsigned long nsect, char *buffer, int dir)
-{
-	int x;
-        x=fseek(f, sector*512, SEEK_SET);
-	assert(x == 0);
-        if (dir)
-                x=fwrite(buffer, 512, nsect, f);
-        else
-                x=fread(buffer, 512, nsect, f);
-	
-	assert(x == nsect);
-}
-
-extern void start_kernel(void);
-
-int kernel_execve(const char *filename, char *const argv[], char *const envp[])
-{
-#if 0
-        int i=1;
-
-        printf("%s: %s ", __FUNCTION__, filename);
-        while(argv[i]) {
-                printf("%s ", argv[i]);
-                fflush(stdout);
-                i++;
-        }
-        printf("\n");
-
-#endif
-
-        if (0 == strcmp(filename, "/bin/init"))
-	{
-		int err = 0;
-		// remount the file system with write access
-		err = sys_mount("/", "/",NULL, MS_REMOUNT | MS_VERBOSE, NULL);
-		if(0 != err)
-			lfd_log(LFD_ERROR, "sys_mount: errorcode %d errormsg %s", -err, lfd_apr_strerror_thunsafe(-err));
-		ftpd_main();
-		//we shouldn't exit this function because the kernel will panic.
-        }
-        return -1;
-}
-#endif
+#endif//LKL_FILE_APIS
 
 
 static void sig_func(int sigid)
@@ -163,12 +97,13 @@ void ftpd_main(void)
 	sys_sync();
 	//nothing gets past this exit call; This is a hack currently used to stop the kernel from issuing a kernel panic.
 	exit(0);
-	#define	LINUX_REBOOT_MAGIC1		0xfee1dead
-	#define	LINUX_REBOOT_MAGIC2		672274793
-	#define	LINUX_REBOOT_CMD_POWER_OFF	0x4321FEDC
+#define	LINUX_REBOOT_MAGIC1		0xfee1dead
+#define	LINUX_REBOOT_MAGIC2		672274793
+#define	LINUX_REBOOT_CMD_POWER_OFF	0x4321FEDC
 	sys_reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_POWER_OFF, NULL);
 #endif
 }
+
 
 static const apr_getopt_option_t opt_option[] = {
 	/* long-option, short-option, has-arg flag, description */
@@ -256,8 +191,12 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	apr_atomic_set32(&ftp_must_exit, 0);
 
 	apr_signal(SIGTERM, sig_func);
+#ifdef SIGKILL
 	apr_signal(SIGKILL, sig_func);
+#endif//SIGKILL
+#ifdef SIGHUP
 	apr_signal(SIGHUP,  sig_func);
+#endif//SIGHUP
 	apr_signal(SIGINT,  sig_func);
 
 
@@ -265,20 +204,10 @@ int main(int argc, char const *const * argv, char const *const * engv)
 #ifndef LKL_FILE_APIS
 	ftpd_main();
 #else //LKL_FILE_APIS
-	rc = apr_pool_create(&lkl_thread_creator_pool, root_pool);
-	if(APR_SUCCESS != rc)
-	{
-		lfd_log(LFD_ERROR, "main: apr_pool_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
-	}
 
-	apr_thread_mutex_create(&kth_mutex, APR_THREAD_MUTEX_UNNESTED, lkl_thread_creator_pool);
-	apr_thread_mutex_lock(kth_mutex);
+	threads_init(&lnops);
+	linux_start_kernel(&lnops, "root=%d:0", FILE_DISK_MAJOR);
 
-	start_kernel();
-
-	apr_thread_mutex_destroy(kth_mutex);
-	apr_pool_destroy(lkl_thread_creator_pool);
-	apr_pool_destroy(root_pool);
 #endif //LKL_FILE_APIS
 	return 0;
 }
