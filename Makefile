@@ -13,7 +13,7 @@ CFLAGS=-g -D_LARGEFILE64_SOURCE $(LKL_DEFINES)
 HERE=$(PWD)
 LINUX=$(HERE)/../linux-2.6
 
-PORTABLE_OBJS=listen.c main.c worker.c utils.c config.c cmdio.c cmdhandler.c sess.c fileops.c filestat.c dirops.c
+PORTABLE_OBJS=listen.c main.c worker.c utils.c config.c cmdio.c cmdhandler.c sess.c fileops.c filestat.c dirops.c sys_declarations.c
 
 
 
@@ -83,7 +83,7 @@ AEXE=$(PORTABLE_OBJS) $(DRV_STDUSER) nt.c lkl-nt/vmlinux
 CFLAGS=-Wall -g -DFILE_DISK_MAJOR=42 -D_LARGEFILE64_SOURCE
 
 clean:
-	-rm -rf daemon-aio.out daemon.exe daemon.exe lkl lkl-nt lkl-aio include
+	-rm -rf daemon-aio.out daemon.out daemon.exe lkl lkl-nt lkl-aio include
 
 daemon-aio.out: $(AOUT-aio) $(INC) include/asm .force
 	gcc $(CFLAGS) $(APR_LIN_INCLUDE) $(AOUT-aio) $(APR_LIN_LIB) -lrt -o $@

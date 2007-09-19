@@ -150,7 +150,7 @@ void lfd_listen(apr_pool_t * mp)
 		}
 		#ifdef LKL_FILE_APIS
 			//###: is this a proper place to issue an "flush buffers to disk"?
-			sys_sync();
+			wrapper_sys_sync();
 		#endif
 		rc = apr_thread_create(&thd, thattr, &lfd_worker_protocol_main, (void*)client_sock, thd_pool);
 		if(APR_SUCCESS != rc)

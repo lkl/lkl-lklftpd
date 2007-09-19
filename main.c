@@ -200,6 +200,7 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	apr_signal(SIGINT,  sig_func);
 
 
+	barrier_init();
 
 #ifndef LKL_FILE_APIS
 	ftpd_main();
@@ -209,5 +210,7 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	linux_start_kernel(&lnops, "root=%d:0", FILE_DISK_MAJOR);
 
 #endif //LKL_FILE_APIS
+
+	barrier_fini();
 	return 0;
 }

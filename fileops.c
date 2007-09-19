@@ -17,7 +17,7 @@ apr_status_t lkl_file_flush_locked(lkl_file_t *thefile)
 
 		do
 		{
-			written = sys_write(thefile->filedes, thefile->buffer, thefile->bufpos);
+			written = wrapper_sys_write(thefile->filedes, thefile->buffer, thefile->bufpos);
 		}
 		while (written == -EINTR);
 		if (written < 0)
@@ -52,12 +52,12 @@ static apr_status_t file_cleanup(lkl_file_t *file)
 	apr_status_t rv = APR_SUCCESS;
 	int ret;
 
-	ret =  sys_close(file->filedes);
+	ret =  wrapper_sys_close(file->filedes);
 	if (0 == ret)
 	{
 		file->filedes = -1;
 		if (file->flags & APR_DELONCLOSE)
-			sys_unlink(file->fname);
+			wrapper_sys_unlink(file->fname);
 		if (file->thlock)
 			rv = apr_thread_mutex_destroy(file->thlock);
 	}
@@ -155,11 +155,11 @@ apr_status_t lkl_file_open(lkl_file_t **new, const char *fname,
 
 	if (perm == APR_OS_DEFAULT)
 	{
-		fd = sys_open(fname, oflags, 0666);
+		fd = wrapper_sys_open(fname, oflags, 0666);
 	}
 	else
 	{
-		fd = sys_open(fname, oflags, lkl_unix_perms2mode(perm));
+		fd = wrapper_sys_open(fname, oflags, lkl_unix_perms2mode(perm));
 	}
 	if (fd < 0)
 		return APR_EINVAL;
@@ -220,7 +220,7 @@ static apr_status_t lkl_wait_for_io_or_timeout(lkl_file_t *f, int for_read)
 
 	do
 	{
-		rc = sys_poll(&pfd, 1, timeout);
+		rc = wrapper_sys_poll(&pfd, 1, timeout);
 	}
 	while (rc == -EINTR);
 	if (!rc)
@@ -261,7 +261,7 @@ static apr_status_t file_read_buffered(lkl_file_t *thefile, void *buf,
 	{
 		if (thefile->bufpos >= thefile->dataRead)
 		{
-			int bytesread = sys_read(thefile->filedes, thefile->buffer, APR_FILE_BUFSIZE);
+			int bytesread = wrapper_sys_read(thefile->filedes, thefile->buffer, APR_FILE_BUFSIZE);
 			if (bytesread == 0)
 			{
 				thefile->eof_hit = 1;
@@ -330,7 +330,7 @@ apr_status_t lkl_file_read(lkl_file_t *thefile, void *buf,
 
 		do
 		{
-			rv = sys_read(thefile->filedes, buf, *nbytes);
+			rv = wrapper_sys_read(thefile->filedes, buf, *nbytes);
 		}
 		while (rv == -EINTR);
 // WAIT FOR IO
@@ -346,7 +346,7 @@ apr_status_t lkl_file_read(lkl_file_t *thefile, void *buf,
 			{
 				do
 				{
-					rv = sys_read(thefile->filedes, buf, *nbytes);
+					rv = wrapper_sys_read(thefile->filedes, buf, *nbytes);
 				}
 				while (rv == -EINTR);
 			}
@@ -387,7 +387,7 @@ apr_status_t lkl_file_write(lkl_file_t *thefile, const void *buf,
 	    //
 			apr_int64_t offset = thefile->filePtr - thefile->dataRead + thefile->bufpos;
 			if (offset != thefile->filePtr)
-				sys_lseek(thefile->filedes, offset, SEEK_SET);
+				wrapper_sys_lseek(thefile->filedes, offset, SEEK_SET);
 			thefile->bufpos = thefile->dataRead = 0;
 			thefile->direction = 1;
 		}
@@ -414,7 +414,7 @@ apr_status_t lkl_file_write(lkl_file_t *thefile, const void *buf,
 	{
 		do
 		{
-			rv = sys_write(thefile->filedes, buf, *nbytes);
+			rv = wrapper_sys_write(thefile->filedes, buf, *nbytes);
 		}
 		while (rv == -EINTR);
 // USE WAIT FOR IO
@@ -432,7 +432,7 @@ apr_status_t lkl_file_write(lkl_file_t *thefile, const void *buf,
 				{
 					do
 					{
-						rv = sys_write(thefile->filedes, buf, *nbytes);
+						rv = wrapper_sys_write(thefile->filedes, buf, *nbytes);
 					}
 					while (rv == -EINTR);
 					if ((rv == -EAGAIN || rv == -EWOULDBLOCK))
@@ -525,7 +525,7 @@ static apr_status_t setptr(lkl_file_t *thefile, apr_off_t pos )
 	}
 	else
 	{
-		rv = sys_lseek(thefile->filedes, pos, SEEK_SET);
+		rv = wrapper_sys_lseek(thefile->filedes, pos, SEEK_SET);
 		if (rv >= 0)
 		{
 			thefile->bufpos = thefile->dataRead = 0;
@@ -576,7 +576,7 @@ apr_status_t lkl_file_seek(lkl_file_t *thefile, apr_seek_where_t where, apr_off_
 	}
 	else
 	{
-		rv = sys_lseek(thefile->filedes, *offset, where);
+		rv = wrapper_sys_lseek(thefile->filedes, *offset, where);
 		if (rv < 0)
 		{
 			*offset = -1;
@@ -602,7 +602,7 @@ apr_status_t lkl_file_remove(const char *path, apr_pool_t *pool)
 {
 	apr_status_t ret;
 
-	ret = sys_unlink(path);
+	ret = wrapper_sys_unlink(path);
 	return -ret;
 }
 
@@ -611,7 +611,7 @@ apr_status_t lkl_file_rename(const char *from_path, const char *to_path,
 {
 	apr_status_t ret;
 
-	ret = sys_rename(from_path, to_path);
+	ret = wrapper_sys_rename(from_path, to_path);
 	return -ret;
 }
 
@@ -628,7 +628,7 @@ apr_status_t lkl_file_lock(lkl_file_t *thefile, int type)
 		ltype |= LOCK_NB;
 
 	/* keep trying if flock() gets interrupted (by a signal) */
-	while ((rc = sys_flock(thefile->filedes, ltype)) == -EINTR)
+	while ((rc = wrapper_sys_flock(thefile->filedes, ltype)) == -EINTR)
 		continue;
 
 	if (rc < 0)
@@ -640,7 +640,7 @@ apr_status_t lkl_file_unlock(lkl_file_t *thefile)
 {
 	int rc;
 
-	while ((rc = sys_flock(thefile->filedes, LOCK_UN)) == -EINTR)
+	while ((rc = wrapper_sys_flock(thefile->filedes, LOCK_UN)) == -EINTR)
 		continue;
 
 	if (rc < 0)

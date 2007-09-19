@@ -11,14 +11,14 @@ static apr_status_t dir_cleanup(void *thedir)
 	lkl_dir_t *dir = thedir;
 	apr_status_t ret;
 
-	ret = sys_close(dir->fd);
+	ret = wrapper_sys_close(dir->fd);
 	return ret;
 }
 
 apr_status_t lkl_dir_open(lkl_dir_t **new, const char *dirname,
                           apr_pool_t *pool)
 {
-	int dir = sys_open(dirname,O_RDONLY|O_DIRECTORY|O_LARGEFILE, 0);
+	int dir = wrapper_sys_open(dirname,O_RDONLY|O_DIRECTORY|O_LARGEFILE, 0);
 
 	if (dir < 0)
 		return APR_EINVAL;
@@ -48,7 +48,7 @@ apr_status_t lkl_dir_make(const char *path, apr_fileperms_t perm,
 	apr_status_t ret;
 	mode_t mode = lkl_unix_perms2mode(perm);
 
-	ret = sys_mkdir(path, mode);
+	ret = wrapper_sys_mkdir(path, mode);
 	return -ret;
 }
 
@@ -56,7 +56,7 @@ apr_status_t lkl_dir_remove(const char *path, apr_pool_t *pool)
 {
 	apr_status_t ret;
 
-	ret = sys_rmdir(path);
+	ret = wrapper_sys_rmdir(path);
 	return -ret;
 }
 
@@ -68,7 +68,7 @@ struct dirent * lkl_readdir(lkl_dir_t *thedir)
 	if(thedir->offset >= thedir->size)
 	{
 		/* We've emptied out our buffer.  Refill it.  */
-		int bytes = sys_getdents(thedir->fd, thedir->data, BUF_SIZE);
+		int bytes = wrapper_sys_getdents(thedir->fd, thedir->data, BUF_SIZE);
 		if(bytes <= 0)
 			return NULL;
 		thedir->size = bytes;
