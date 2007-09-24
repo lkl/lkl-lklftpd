@@ -1,4 +1,4 @@
-#uncoment the next 2 lines to get LKL's file APIs
+#uncoment the next 2 lines to get LKL's file APIs. This currently works on linux only
 LKL_DEFINES+=-DLKL_FILE_APIS
 LKL=lkl/vmlinux
 
@@ -6,19 +6,17 @@ APR_LIN_INCLUDE=-I/usr/include/apr-1.0/
 APR_WIN_INCLUDE=-Iapr_win/include/
 
 APR_LIN_LIB=-L/usr/lib/debug/usr/lib/libapr-1.so.0.2.7 -lapr-1
-APR_WIN_LIB=apr_win/libapr-1.lib
+APR_WIN_LIB=apr_win/Debug/libapr-1.lib
 
 
-CFLAGS=-g -D_LARGEFILE64_SOURCE $(LKL_DEFINES)
 HERE=$(PWD)
 LINUX=$(HERE)/../linux-2.6
 
 PORTABLE_OBJS=listen.c main.c worker.c utils.c config.c cmdio.c cmdhandler.c sess.c fileops.c filestat.c dirops.c sys_declarations.c
 
 
+all: daemon-aio.out daemon.out
 
-
-all: daemon.exe daemon.out daemon-aio.out
 
 include/asm:
 	-mkdir `dirname $@`
@@ -80,7 +78,7 @@ AOUT=$(PORTABLE_OBJS) posix.c $(DRV_STDUSER) lkl/vmlinux
 AOUT-aio=$(PORTABLE_OBJS) $(DRV_AIO) posix.c lkl-aio/vmlinux
 AEXE=$(PORTABLE_OBJS) $(DRV_STDUSER) nt.c lkl-nt/vmlinux
 
-CFLAGS=-Wall -g -DFILE_DISK_MAJOR=42 -D_LARGEFILE64_SOURCE
+CFLAGS=-Wall -g -DFILE_DISK_MAJOR=42 -D_LARGEFILE64_SOURCE $(LKL_DEFINES)
 
 clean:
 	-rm -rf daemon-aio.out daemon.out daemon.exe lkl lkl-nt lkl-aio include

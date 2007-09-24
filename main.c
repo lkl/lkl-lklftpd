@@ -38,7 +38,6 @@ void ftpd_main(void);
 #include <linux/unistd.h>
 #include <linux/sched.h>
 #include <linux/fs.h>
-#include "lkl_thread.h"
 
 
 
