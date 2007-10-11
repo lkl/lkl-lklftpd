@@ -1,6 +1,5 @@
 A LKL and APR based FTP daemon.
 
-
 Prerequisites:
 	a) APR library - The Apache Portable Runtime Library.
 		- a set of minimalistic C wrappers over system calls
