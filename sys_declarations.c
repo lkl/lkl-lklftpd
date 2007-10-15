@@ -1,59 +1,105 @@
-#ifdef LKL_FILE_APIS
-
-#include "sys_declarations.h"
-
-//The Linux original names
-
-asmlinkage long sys_sync(void);
-asmlinkage long sys_mount(char __user *dev_name, char __user *dir_name,  char __user *type, unsigned long flags,    void __user *data);
-asmlinkage long sys_reboot(int magic1, int magic2, unsigned int cmd,  void __user *arg);
-asmlinkage ssize_t sys_write(unsigned int fd, const char __user *buf,    size_t count);
-asmlinkage long sys_close(unsigned int fd);
-asmlinkage long sys_unlink(const char __user *pathname);
-asmlinkage long sys_open(const char __user *filename, int flags, int mode);
-asmlinkage long sys_poll(struct pollfd __user *ufds, unsigned int nfds, long timeout);
-asmlinkage ssize_t sys_read(unsigned int fd, char __user *buf,  size_t count);
-asmlinkage off_t sys_lseek(unsigned int fd, off_t offset,  unsigned int origin);
-asmlinkage long sys_rename(const char __user *oldname,  const char __user *newname);
-asmlinkage long sys_flock(unsigned int fd, unsigned int cmd);
-asmlinkage long sys_newfstat(unsigned int fd, struct stat __user *statbuf);
-asmlinkage long sys_chmod(const char __user *filename, mode_t mode);
-asmlinkage long sys_newlstat(char __user *filename, struct stat __user *statbuf);
-asmlinkage long sys_mkdir(const char __user *pathname, int mode);
-asmlinkage long sys_rmdir(const char __user *pathname);
-asmlinkage long sys_getdents(unsigned int fd, struct linux_dirent __user *dirent, unsigned int count);
-asmlinkage long sys_newstat(char __user *filename, struct stat __user *statbuf);
-asmlinkage long sys_utimes(const char __user *filename, struct timeval __user *utimes);
+#include <asm/page.h>
+#include <linux/types.h>
+#include <linux/errno.h>
+#include <linux/stat.h>
+#include <asm/unistd.h>
+#include <linux/fs.h>
 
 
-//our wrappers
-#include <apr_pools.h>
-#include <apr_thread_mutex.h>
-apr_thread_mutex_t	* barrier_mutex;
-apr_pool_t 		* barrier_pool;
-void barrier_init(void)
+#include <malloc.h>
+#include <string.h>
+
+#include "drivers/disk.h"
+#include "barrier.h"
+
+int get_filesystem_list(char * buf);
+
+static void get_fs_names(char *page)
 {
-	apr_pool_create(&barrier_pool, NULL);
-	apr_thread_mutex_create(&barrier_mutex, APR_THREAD_MUTEX_UNNESTED, barrier_pool);
+        char *s = page;
+        int len = get_filesystem_list(page);
+        char *p, *next;
+
+        page[len] = '\0';
+        for (p = page-1; p; p = next) {
+                next = strchr(++p, '\n');
+                if (*p++ != '\t')
+                        continue;
+                while ((*s++ = *p++) != '\n')
+                        ;
+                s[-1] = '\0';
+        }
+
+        *s = '\0';
 }
 
-void barrier_fini(void)
+static int try_mount(char *fstype, char *devno_str, char *mnt, int flags, void *data)
 {
-	apr_thread_mutex_destroy(barrier_mutex);
-	apr_pool_destroy(barrier_pool);
+	int err;
+	char *p, *fs_names;
+
+	if (fstype)
+		return sys_safe_mount(devno_str, mnt, fstype, flags, data);
+		
+	fs_names=malloc(PAGE_SIZE);
+	get_fs_names(fs_names);
+retry:
+	for (p = fs_names; *p; p += strlen(p)+1) {
+		err = sys_safe_mount(devno_str, mnt, p, flags, data);
+		switch (err) {
+			case 0:
+				goto out;
+			case -EACCES:
+				flags |= MS_RDONLY;
+				goto retry;
+			case -EINVAL:
+				continue;
+		}
+	}
+out:
+	free(fs_names);
+
+	return err;
 }
 
-void barrier_enter(void)
+long wrapper_sys_mount(void *file, char *fstype)
 {
-	apr_thread_mutex_lock(barrier_mutex);
+	dev_t devno;
+	char devno_str[] = { "/dev/xxxxxxxxxxxxxxxx" };
+	char mnt[] = { "/mnt/xxxxxxxxxxxxxxxx" };
+	
+	if (lkl_disk_add_disk(file, &devno)) 
+		goto out_error;
+
+	/* create /dev/dev */
+	snprintf(devno_str, sizeof(devno_str), "/dev/%016x", devno);
+	if (sys_mknod(devno_str, S_IFBLK|0600, devno)) 
+		goto out_error;
+
+	/* create /mnt/filename */ 
+	sprintf(mnt, "/mnt/%016x", devno);
+	if (sys_mkdir(mnt, 0700))
+		goto out_del_dev;
+
+	if (try_mount(fstype, devno_str, mnt, MS_RDONLY, 0))
+		goto out_del_mnt_dir;
+
+	sys_chdir(mnt);
+        sys_safe_mount(".", "/", NULL, MS_MOVE, NULL);
+        sys_chroot(".");
+		
+	return 0;
+
+out_del_mnt_dir:
+	sys_unlink(mnt);
+out_del_dev:
+	sys_unlink(devno_str);
+out_error:
+	return -1;
 }
 
-void barrier_exit(void)
-{
-	apr_thread_mutex_unlock(barrier_mutex);
-}
 
-asmlinkage long wrapper_sys_sync(void)
+long wrapper_sys_sync(void)
 {
 	long l;
 	barrier_enter();
@@ -61,21 +107,18 @@ asmlinkage long wrapper_sys_sync(void)
 	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_mount(char __user *dev_name, char __user *dir_name,  char __user *type, unsigned long flags,    void __user *data){
-	long l;
-	barrier_enter();
-	l = sys_mount(dev_name, dir_name,  type, flags,data);
-	barrier_exit();
-	return l;
-}
-asmlinkage long wrapper_sys_reboot(int magic1, int magic2, unsigned int cmd,  void __user *arg){
+
+long wrapper_sys_reboot(int magic1, int magic2, unsigned int cmd,  void *arg)
+{
 	long l;
 	barrier_enter();
 	l = sys_reboot(magic1, magic2, cmd,  arg);
 	barrier_exit();
 	return l;
 }
-asmlinkage ssize_t wrapper_sys_write(unsigned int fd, const char __user *buf,    size_t count){
+
+ssize_t wrapper_sys_write(unsigned int fd, const char *buf,    size_t count)
+{
 	ssize_t l;
 	barrier_enter();
 	l = sys_write(fd, buf,    count);
@@ -83,126 +126,148 @@ asmlinkage ssize_t wrapper_sys_write(unsigned int fd, const char __user *buf,   
 
 	return l;
 }
-asmlinkage long wrapper_sys_close(unsigned int fd){
+
+long wrapper_sys_close(unsigned int fd)
+{
 	long l;
 	barrier_enter();
 	l = sys_close(fd);
 	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_unlink(const char __user *pathname){
+
+long wrapper_sys_unlink(const char *pathname)
+{
 	long l;
 	barrier_enter();
 	l = sys_unlink(pathname);
 	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_open(const char __user *filename, int flags, int mode){
+
+long wrapper_sys_open(const char *filename, int flags, int mode)
+{
 	long l;
 	barrier_enter();
 	l = sys_open(filename, flags, mode);
 	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_poll(struct pollfd __user *ufds, unsigned int nfds, long timeout){
+
+long wrapper_sys_poll(struct pollfd *ufds, unsigned int nfds, long timeout)
+{
 	long l;
 	barrier_enter();
 	l = sys_poll(ufds, nfds, timeout);
 	barrier_exit();
 	return l;
 }
-asmlinkage ssize_t wrapper_sys_read(unsigned int fd, char __user *buf,  size_t count){
+
+ssize_t wrapper_sys_read(unsigned int fd, char *buf,  size_t count)
+{
 	ssize_t l;
 	barrier_enter();
 	l = sys_read(fd, buf,  count);
 	barrier_exit();
 	return l;
 }
-asmlinkage off_t wrapper_sys_lseek(unsigned int fd, off_t offset,  unsigned int origin){
+
+off_t wrapper_sys_lseek(unsigned int fd, off_t offset,  unsigned int origin)
+{
 	off_t l;
 	barrier_enter();
 	l = sys_lseek(fd, offset,  origin);
- barrier_exit();
+	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_rename(const char __user *oldname,  const char __user *newname){
+
+long wrapper_sys_rename(const char *oldname,  const char *newname)
+{
 	long l;
 	barrier_enter();
 	l = sys_rename(oldname,newname);
- barrier_exit();
+	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_flock(unsigned int fd, unsigned int cmd){
+
+long wrapper_sys_flock(unsigned int fd, unsigned int cmd)
+{
 	long l;
 	barrier_enter();
 	l = sys_flock(fd, cmd);
- barrier_exit();
+	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_newfstat(unsigned int fd, struct stat __user *statbuf){
+
+long wrapper_sys_newfstat(unsigned int fd, struct stat *statbuf)
+{
 	long l;
 	barrier_enter();
 	l = sys_newfstat(fd, statbuf);
- barrier_exit();
+	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_chmod(const char __user *filename, mode_t mode){
+
+long wrapper_sys_chmod(const char *filename, mode_t mode)
+{
 	long l;
 	barrier_enter();
 	l = sys_chmod(filename, mode);
- barrier_exit();
+	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_newlstat(char __user *filename, struct stat __user *statbuf){
+
+long wrapper_sys_newlstat(char *filename, struct stat *statbuf)
+{
 	long l;
 	barrier_enter();
 	l = sys_newlstat(filename, statbuf);
- barrier_exit();
+	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_mkdir(const char __user *pathname, int mode){
+
+long wrapper_sys_mkdir(const char *pathname, int mode)
+{
 	long l;
 	barrier_enter();
 	l = sys_mkdir(pathname, mode);
- barrier_exit();
+	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_rmdir(const char __user *pathname){
+
+long wrapper_sys_rmdir(const char *pathname)
+{
 	long l;
 	barrier_enter();
 	l = sys_rmdir(pathname);
- barrier_exit();
+	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_getdents(unsigned int fd, struct linux_dirent __user *dirent, unsigned int count){
+
+long wrapper_sys_getdents(unsigned int fd, struct linux_dirent *dirent, unsigned int count)
+{
 	long l;
 	barrier_enter();
 	l = sys_getdents(fd, dirent, count);
- barrier_exit();
+	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_newstat(char __user *filename, struct stat __user *statbuf){
+
+long wrapper_sys_newstat(char *filename, struct stat *statbuf)
+{
 	long l;
 	barrier_enter();
 	l = sys_newstat(filename, statbuf);
- barrier_exit();
+	barrier_exit();
 	return l;
 }
-asmlinkage long wrapper_sys_utimes(const char __user *filename, struct timeval __user *utimes){
+
+long wrapper_sys_utimes(const char *filename, struct timeval *utimes)
+{
 	long l;
 	barrier_enter();
 	l = sys_utimes(filename, utimes);
- barrier_exit();
+	barrier_exit();
 	return l;
 }
-#else//LKL_FILE_APIS
 
-void barrier_init(void)
-{
-}
-
-void barrier_fini(void)
-{
-}
-
-#endif//LKL_FILE_APIS

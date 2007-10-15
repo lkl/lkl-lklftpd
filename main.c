@@ -9,71 +9,18 @@
 #include <apr_errno.h>
 #include <apr_atomic.h>
 #include <apr_getopt.h>
+#include <apr_file_io.h>
 
 #include "sys_declarations.h"
 #include "utils.h"
 #include "config.h"
 #include "listen.h"
+#include "lklops.h"
 
 volatile apr_uint32_t ftp_must_exit;
 
 
 void ftpd_main(void);
-
-#ifdef LKL_FILE_APIS
-
-#include "include/asm/callbacks.h"
-
-#include <stdlib.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <malloc.h>
-#include <assert.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include <linux/types.h>
-#include <linux/dirent.h>
-#include <linux/unistd.h>
-#include <linux/sched.h>
-#include <linux/fs.h>
-
-
-
-
-long linux_panic_blink(long time)
-{
-	assert(0);
-	return 0;
-}
-
-static void *_phys_mem;
-
-void linux_mem_init(unsigned long *phys_mem, unsigned long *phys_mem_size)
-{
-	*phys_mem_size=256*1024*1024;
-	*phys_mem=(unsigned long)malloc(*phys_mem_size);
-}
-
-void linux_halt(void)
-{
-	free(_phys_mem);
-}
-
-extern void threads_init(struct linux_native_operations *lnops);
-
-static struct linux_native_operations lnops = {
-	.panic_blink = linux_panic_blink,
-	.mem_init = linux_mem_init,
-	.main = ftpd_main,
-	.halt = linux_halt
-};
-
-
-
-#endif//LKL_FILE_APIS
-
 
 static void sig_func(int sigid)
 {
@@ -85,27 +32,50 @@ static void sig_func(int sigid)
 }
 
 apr_pool_t	* root_pool;
-void ftpd_main(void)
+
+static const char *disk_image="disk";
+static const char *fs_type;
+static int ro=0;
+
+#ifdef LKL_FILE_APIS
+void lkl_main(void)
 {
+	apr_file_t *disk_file;
+	apr_status_t status;
+	
+	if ((status=apr_file_open(&disk_file, disk_image, APR_FOPEN_READ|(ro?0:APR_FOPEN_WRITE)|APR_FOPEN_BINARY,
+				  APR_OS_DEFAULT, root_pool)) != APR_SUCCESS) {
+		lfd_log(LFD_ERROR, "failed to open disk image '%s': %s", disk_image, lfd_apr_strerror_thunsafe(status));
+		return;
+	}
+
+	if ((status=wrapper_sys_mkdir("/mnt", 0700))) {
+		lfd_log(LFD_ERROR, "failed to mkdir /mnt: %d", status);
+		return;
+	}
+
+	if ((status=wrapper_sys_mount((void*)disk_file, NULL)) < 0) {
+		//FIXME: add string error code; note that the error code is not
+		//compatible with apr (unless you are running on linux/i386); we
+		//most likely need error codes strings in lkl itself; need to
+		//fix other cases as well
+		lfd_log(LFD_ERROR, "failed to mount disk: %d", status);
+		return;
+	}
+
 	printf("Ftp server preparing to accept client connections.\n");
 	lfd_listen(root_pool);
 	printf("Ftp server is not running any more. Client connections will be obliterated.\n");
-
-#ifdef LKL_FILE_APIS
-	//flush them buffers!
-	sys_sync();
-	//nothing gets past this exit call; This is a hack currently used to stop the kernel from issuing a kernel panic.
-	exit(0);
-#define	LINUX_REBOOT_MAGIC1		0xfee1dead
-#define	LINUX_REBOOT_MAGIC2		672274793
-#define	LINUX_REBOOT_CMD_POWER_OFF	0x4321FEDC
-	sys_reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_POWER_OFF, NULL);
-#endif
 }
-
+#endif
 
 static const apr_getopt_option_t opt_option[] = {
 	/* long-option, short-option, has-arg flag, description */
+#ifdef LKL_FILE_APIS
+	{ "read-only", 'r', FALSE, "read-only mode" },
+	{ "fs-type", 't', TRUE, "filesystem type (ext3, etc.)" },
+	{ "filename", 'f', TRUE, "path to disk (image) to use" },
+#endif
 	{ "port", 'p', TRUE, "port to listen on" },
 	{ "help", 'h', 0, "display this help and exit" },
 	{ NULL, 0, 0, NULL },
@@ -138,6 +108,15 @@ static int parse_command_line(int argc, char const *const * argv)
 	{
 		switch (optch)
 		{
+		case 'r':
+			ro=1;
+			break;
+		case 't':
+			fs_type=optarg;
+			break;
+		case 'f':
+			disk_image=optarg;
+			break;
 		case 'p':
 			lfd_config_listen_port=atoi(optarg);
 			lfd_config_data_port=0;
@@ -198,16 +177,12 @@ int main(int argc, char const *const * argv, char const *const * engv)
 #endif//SIGHUP
 	apr_signal(SIGINT,  sig_func);
 
-
 	barrier_init();
 
 #ifndef LKL_FILE_APIS
-	ftpd_main();
+	lfd_listen(root_pool);
 #else //LKL_FILE_APIS
-
-	threads_init(&lnops);
-	linux_start_kernel(&lnops, "root=%d:0", FILE_DISK_MAJOR);
-
+	lkl_init(lkl_main);
 #endif //LKL_FILE_APIS
 
 	barrier_fini();

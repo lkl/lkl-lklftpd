@@ -12,10 +12,12 @@ APR_WIN_LIB=apr_win/Debug/libapr-1.lib
 HERE=$(PWD)
 LINUX=$(HERE)/../linux-2.6
 
-PORTABLE_OBJS=listen.c main.c worker.c utils.c config.c cmdio.c cmdhandler.c sess.c fileops.c filestat.c dirops.c sys_declarations.c
+OBJS=listen.o main.o worker.o utils.o config.o cmdio.o cmdhandler.o	\
+	 sess.o fileops.o filestat.o dirops.o sys_declarations.o	\
+	barrier.o lklops.o disk.o 
 
 
-all: daemon-aio.out daemon.out
+all: daemon.out 
 
 
 include/asm:
@@ -40,54 +42,41 @@ include/linux:
 
 INC=include/asm include/asm-generic include/asm-i386 include/linux
 
-lkl-aio/vmlinux: .force lkl-aio/.config
+lkl/vmlinux: lkl/.config drivers/*.c drivers/Makefile
 	cd $(LINUX) && \
 	$(MAKE) O=$(HERE)/`dirname $@` ARCH=lkl \
-		LKL_DRIVERS="$(HERE)/drivers/posix-aio/lkl/ $(HERE)/drivers/stduser/lkl" \
-		EXTRA_CFLAGS=-DNR_IRQS=2 \
-		STDIO_CONSOLE=y FILE_DISK_MAJOR=42 \
+		LKL_DRIVERS=$(HERE)/drivers \
 		vmlinux
 
-lkl/vmlinux: .force lkl/.config
-	cd $(LINUX) && \
-	$(MAKE) O=$(HERE)/`dirname $@` ARCH=lkl \
-		LKL_DRIVERS=$(HERE)/drivers/stduser/lkl \
-		STDIO_CONSOLE=y FILE_DISK=y FILE_DISK_MAJOR=42 \
-		vmlinux
-
-lkl-nt/vmlinux: .force lkl-nt/.config
+lkl-nt/vmlinux: lkl-nt/.config
 	cd $(LINUX) && \
 	$(MAKE) O=$(HERE)/`dirname $@` ARCH=lkl CROSS_COMPILE=i586-mingw32msvc- \
-		LKL_DRIVERS=$(HERE)/drivers/stduser/lkl \
-		STDIO_CONSOLE=y FILE_DISK=y FILE_DISK_MAJOR=42 \
+		LKL_DRIVERS=$(HERE)/drivers \
 		vmlinux
 
-lkl-ntk/vmlinux: .force lkl-ntk/.config
-	cd $(LINUX) && \
-	$(MAKE) O=$(HERE)/`dirname $@` ARCH=lkl CROSS_COMPILE=i586-mingw32msvc- \
-		LKL_DRIVERS="$(HERE)/drivers/ntk/lkl/ $(HERE)/drivers/stduser/lkl/" \
-		FILE_DISK=y FILE_DISK_MAJOR=42 \
-		vmlinux
+CFLAGS=-Wall -g -DFILE_DISK_MAJOR=42 -D_LARGEFILE64_SOURCE $(LKL_DEFINES)	\
+	$(APR_LIN_INCLUDE) -Werror
 
 
-DRV_STDUSER=drivers/stduser/disk.c drivers/stduser/console.c
-DRV_AIO=drivers/stduser/console.c drivers/posix-aio/disk-async.c
-DRV_NTK=drivers/ntk/disk.c
+sys_declarations.o: sys_declarations.c $(INC)
+	$(CC) -c $(CFLAGS) -Iinclude $< 
 
-AOUT=$(PORTABLE_OBJS) posix.c $(DRV_STDUSER) lkl/vmlinux
-AOUT-aio=$(PORTABLE_OBJS) $(DRV_AIO) posix.c lkl-aio/vmlinux
-AEXE=$(PORTABLE_OBJS) $(DRV_STDUSER) nt.c lkl-nt/vmlinux
 
-CFLAGS=-Wall -g -DFILE_DISK_MAJOR=42 -D_LARGEFILE64_SOURCE $(LKL_DEFINES)
+%.o: %.c $(INC)
+	$(CC) -c $(CFLAGS) $< 
+
+
+AOUT=$(OBJS) lkl/vmlinux
+AEXE=$(OBJS) lkl-nt/vmlinux
 
 clean:
-	-rm -rf daemon-aio.out daemon.out daemon.exe lkl lkl-nt lkl-aio include
+	-rm -rf daemon-aio.out daemon.out daemon.exe lkl lkl-nt lkl-aio include *.o drivers/*.o drivers/built-in* drivers/.*.cmd
 
-daemon-aio.out: $(AOUT-aio) $(INC) include/asm .force
-	gcc $(CFLAGS) $(APR_LIN_INCLUDE) $(AOUT-aio) $(APR_LIN_LIB) -lrt -o $@
+TAGS: 
+	etags *.c drivers/*.c
 
-daemon.out: $(AOUT) $(INC) include/asm .force
-	gcc $(CFLAGS) $(APR_LIN_INCLUDE) $(AOUT) $(APR_LIN_LIB) -o $@
+daemon.out: $(AOUT) $(INC) include/asm 
+	gcc  $(AOUT) $(APR_LIN_LIB) -o $@
 
 daemon.exe: $(AEXE) $(INC)
 	i586-mingw32msvc-gcc $(CFLAGS) $(APR_WIN_INCLUDE) $(AEXE) $(APR_WIN_LIB) -o $@
