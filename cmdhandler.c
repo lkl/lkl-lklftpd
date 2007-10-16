@@ -2,6 +2,8 @@
 
 #include <apr_strings.h>
 #include <apr_tables.h>
+#include <apr_random.h>
+#include <apr_poll.h>
 
 #include <assert.h>
 #include "cmdhandler.h"
@@ -30,47 +32,108 @@ int handle_pass_cmd(struct lfd_sess* p_sess)
 	return 1;
 }
 
+static apr_status_t bind_to_random_passive_port(struct lfd_sess * sess, apr_sockaddr_t	** psaddr, apr_port_t * pport)
+{
+	apr_port_t 	bind_retries = 10;
+	apr_port_t	min_port = (lfd_config_min_pasv_port < 1023 ) ? 1024  : lfd_config_min_pasv_port;
+	apr_port_t	max_port = (lfd_config_min_pasv_port > 65535) ? 65535 : lfd_config_max_pasv_port;
+	apr_port_t	rand_port;
+	unsigned char	randBuff[2];
+	apr_status_t	rc = -1;
+	apr_socket_t	*listen_fd;
+	apr_sockaddr_t	*saddr;
+	
+	
+	while(--bind_retries)
+	{
+		rc = apr_generate_random_bytes(randBuff, (apr_size_t)2);
+		if(APR_SUCCESS != rc)
+		{
+			continue;
+		}
+		//get random short value
+		rand_port = (apr_port_t) (randBuff[0] << 8 | randBuff[1]);
+		//scale it to fit the interval
+		rand_port = (apr_port_t) ( ( (apr_uint64_t) (max_port - min_port + 1)) * rand_port / max_port + min_port );
+		rc = apr_sockaddr_info_get(&saddr, lfd_config_listen_host, APR_UNSPEC, rand_port, 0, sess->sess_pool);
+		if(APR_SUCCESS != rc)
+		{
+			continue;
+		}
+		rc = apr_socket_create(&listen_fd, saddr->family, SOCK_STREAM, APR_PROTO_TCP, sess->sess_pool);
+		if(APR_SUCCESS != rc)
+		{
+			continue;
+		}
+		rc = apr_socket_opt_set(listen_fd, APR_SO_REUSEADDR, 1);
+		if(APR_SUCCESS != rc)
+		{
+			continue;
+		}
+		rc = apr_socket_opt_set(listen_fd, APR_SO_NONBLOCK, 1);
+		if(APR_SUCCESS != rc)
+		{
+			continue;
+		}
+		rc = apr_socket_bind(listen_fd, saddr);
+		if(APR_SUCCESS == rc)
+		{
+			break;
+		}
+	}
+	
+	if(!bind_retries)
+	{
+		lfd_log(LFD_ERROR, "bind_to_random_passive_port failed");
+		return APR_ENOSOCKET;
+	}
+	if (APR_SUCCESS == rc)
+	{
+		*pport = rand_port;
+		*psaddr = saddr;
+		sess->pasv_listen_fd = listen_fd;
+	}
+	return rc;
+}
+
 apr_status_t handle_passive(struct lfd_sess * sess)
 {
-	apr_status_t	  rc;
-	apr_socket_t	* listen_fd;
-	apr_sockaddr_t	* saddr;
-
-	unsigned char vals[6];
-	const unsigned char* p_raw;
-	char * addr;
+	apr_status_t	rc;
+	apr_sockaddr_t	*saddr;
+	apr_port_t	port;
+	unsigned char	vals[6];
+	char		*addr;
 
 	port_cleanup(sess);
 	pasv_cleanup(sess);
 
-	rc = apr_sockaddr_info_get(&saddr, lfd_config_listen_host, APR_UNSPEC, lfd_config_data_port, 0, sess->loop_pool);
+	rc = bind_to_random_passive_port(sess, &saddr, &port);
 	if(APR_SUCCESS != rc)
 	{
 		return rc;
 	}
-	rc = apr_socket_create(&listen_fd, saddr->family, SOCK_STREAM, APR_PROTO_TCP, sess->sess_pool);
+	
+	rc = apr_socket_listen(sess->pasv_listen_fd, 1); //backlog of one!
 	if(APR_SUCCESS != rc)
 	{
 		return rc;
 	}
-	rc = apr_socket_opt_set(listen_fd, APR_SO_REUSEADDR, 1);
+	
+	//get the IP represented as a string of characters
+	rc = apr_sockaddr_ip_get(&addr, saddr);
 	if(APR_SUCCESS != rc)
 	{
 		return rc;
 	}
-	rc = apr_socket_bind(listen_fd, saddr);
-	if(APR_SUCCESS != rc)
-	{
-		return rc;
-	}
-	sess->pasv_listen_fd = listen_fd;
-
-	apr_sockaddr_ip_get(&addr, saddr);
-	p_raw = lkl_str_parse_uchar_string_sep(addr, '.', vals,4);
-	vals[4] = lfd_config_data_port >> 8;
-	vals[5] = (unsigned char) (lfd_config_data_port & 0xFF);
+	
+	// fill the first 4 elemnts of vals with the numbers from the IP address
+	lkl_str_parse_uchar_string_sep(addr, '.', vals, 4);
+	
+	// append the decomposed port number
+	vals[4] = (unsigned char) (port >> 8);
+	vals[5] = (unsigned char) (port & 0xFF);
+	
 	rc = lfd_cmdio_write(sess, FTP_PASVOK,"Entering Passive Mode. %d,%d,%d,%d,%d,%d", vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
-	//TODO:implement
 	return APR_SUCCESS;
 }
 
@@ -592,19 +655,35 @@ static apr_status_t get_bound_and_connected_ftp_port_sock(struct lfd_sess* p_ses
  */
 static apr_status_t get_bound_and_connected_ftp_pasv_sock(struct lfd_sess* p_sess, apr_socket_t ** psock)
 {
-// 	apr_socket_t	* sock;
-// 	apr_sockaddr_t	* saddr;
-// 	apr_status_t	  rc;
-//
-// 	*psock = NULL;
-//
-// 	rc = apr_socket_listen(p_sess->pasv_listen_fd, 1); //backlog of one!
-// 	rc = apr_socket_connect (sock, p_sess->p_port_sockaddr);
-// 	if(APR_SUCCESS != rc)
-// 		return rc;
-//
-// 	*psock = sock;
-	return APR_SUCCESS;
+	apr_pollfd_t	poolfd;
+	apr_int32_t	nsds;
+	apr_status_t	rc;
+	int 		nr_tries = 2;
+	
+	poolfd.p         = p_sess->loop_pool;
+	poolfd.desc_type = APR_POLL_SOCKET;
+	poolfd.reqevents = APR_POLLIN|APR_POLLHUP|APR_POLLERR;
+	poolfd.rtnevents = 0;
+	poolfd.desc.s    = p_sess->pasv_listen_fd;
+	
+	while(-- nr_tries)
+	{
+		poolfd.rtnevents = 0;
+		rc = apr_poll(&poolfd, 1, &nsds, apr_time_from_sec(1));
+		if ( APR_STATUS_IS_TIMEUP(rc) || APR_STATUS_IS_EINTR(rc) )
+			continue;
+		if ( (APR_SUCCESS == rc) && (APR_POLLIN & poolfd.rtnevents) )
+			break;
+			
+		//an unrecoverable error occured
+		lfd_log(LFD_ERROR, "get_bound_and_connected_ftp_pasv_sock: apr_poll failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+		return rc;
+	}
+	
+	if(!nr_tries)
+		return APR_ENOSOCKET;
+	
+	return apr_socket_accept(psock, p_sess->pasv_listen_fd, p_sess->sess_pool);
 }
 
 static apr_status_t lfd_ftpdataio_get_pasv_fd(struct lfd_sess* p_sess, apr_socket_t ** psock)
@@ -616,7 +695,7 @@ static apr_status_t lfd_ftpdataio_get_pasv_fd(struct lfd_sess* p_sess, apr_socke
 	if (APR_SUCCESS != rc)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADSENDCONN, "Failed to establish connection.");
-		lfd_log(LFD_ERROR, "get_bound_and_connected_ftp_port_sock failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(p_sess, rc));
+		lfd_log(LFD_ERROR, "get_bound_and_connected_ftp_pasv_sock failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(p_sess, rc));
 		return rc;
 	}
 

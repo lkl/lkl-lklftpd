@@ -8,6 +8,8 @@ extern int lfd_config_max_acceptloop_timeout;
 extern int lfd_config_max_login_attempts;
 extern int lfd_config_listen_port;
 extern int lfd_config_data_port;
+extern int lfd_config_min_pasv_port;
+extern int lfd_config_max_pasv_port;
 extern const char * lfd_config_listen_host;
 extern const char * lfd_config_banner_string;
 extern int lfd_config_backlog;
