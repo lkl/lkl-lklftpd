@@ -36,8 +36,8 @@ struct lfd_sess
 	char			* ftp_arg_str;			// command argument
 	char			* rel_path;			// the path relative to the user's home directory - it may be
 								// changed by the user;
-	apr_socket_t		* pasv_listen_fd;		//PASSIVE listen descriptor
-	apr_sockaddr_t		* p_port_sockaddr;		//port configured by PORT to be used by ### TODO insert where it's supposed to be used
+	apr_socket_t		* pasv_listen_fd;		//PASSIVE listen descriptor. The data socket is determined by accepting a socket on this listening socket.
+	apr_sockaddr_t		* p_port_sockaddr;		//port configured by PORT to be used in active connections. The data socket is obtained by connecting a socket to this address
 	apr_off_t		  restart_pos;			//REST value.
 	int 			  is_ascii;			//current mode is ASCII.
 };
