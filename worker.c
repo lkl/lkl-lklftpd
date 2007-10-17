@@ -13,6 +13,7 @@
 #include "fileops.h"
 #include "cmdhandler.h"
 #include "sess.h"
+#include "connection.h"
 
 extern volatile apr_uint32_t ftp_must_exit;
 static apr_status_t emit_greeting(struct lfd_sess * sess)
@@ -143,11 +144,7 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 
 		if(lfd_cmdio_cmd_equals(sess, "PASV"))
 		{
-			rc = handle_passive(sess);
-		}
-		else if(lfd_cmdio_cmd_equals(sess, "ACTIVE"))
-		{
-			rc = handle_active(sess);
+			rc = handle_pasv(sess);
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "SYST"))
 		{

@@ -1,4 +1,5 @@
 // utilities that may be needed in more than one place
+#include <apr_strings.h>
 #include "utils.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -91,5 +92,50 @@ struct ascii_to_bin_ret lfd_ascii_ascii_to_bin(char* p_buf, apr_size_t in_len, i
 	}
 	rc.stored = written;
 	return rc;
+}
+
+
+/**
+ *@brief parses a string of delimited numbers between 0 and 255 and stores them in the p_items buffer
+ */
+const unsigned char * lkl_str_parse_uchar_string_sep(char * input_str, char sep, unsigned char* p_items, unsigned int items)
+{
+	char * last, * str;
+	unsigned int i;
+	apr_status_t rc;
+	char sep_str[] = " ";
+	sep_str[0] = sep;
+
+	last = input_str;
+	for (i = 0; i < items; i++)
+	{
+		apr_off_t this_number;
+
+		str = apr_strtok(input_str, sep_str, &last);
+		if((NULL == str) || ('\0' == *str))
+			return 0;
+
+		/* Sanity - check for too many or two few tokens! */
+		if (    (i <  (items-1) && (0 == strlen(last))) ||
+				       (i == (items-1) && (0 != strlen(last))))
+		{
+			return 0;
+		}
+
+		rc = apr_strtoff(&this_number, input_str, NULL, 10);
+		if(APR_SUCCESS != rc)
+			return 0;
+
+		// validate range fits into one byte
+		if(this_number < 0 || this_number > 255)
+			return 0;
+
+		/* If this truncates from int to uchar, we don't care */
+		p_items[i] = (unsigned char) this_number;
+
+		/* The right hand side of the comma now becomes the new string to breakdown */
+		input_str = last;
+	}
+	return p_items;
 }
 

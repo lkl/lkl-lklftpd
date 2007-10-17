@@ -15,11 +15,8 @@ apr_status_t handle_abort(struct lfd_sess* sess);
 
 
 // administrative commands
-apr_status_t handle_passive(struct lfd_sess * sess);
-apr_status_t handle_active(struct lfd_sess * sess);
 apr_status_t handle_syst(struct lfd_sess * sess);
 apr_status_t handle_type(struct lfd_sess *psess);
-apr_status_t handle_port(struct lfd_sess* sess);
 apr_status_t handle_site(struct lfd_sess* sess);
 
 

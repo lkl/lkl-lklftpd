@@ -14,6 +14,7 @@ LINUX=$(HERE)/../linux-2.6
 
 OBJS=listen.o main.o worker.o utils.o config.o cmdio.o cmdhandler.o	\
 	 sess.o fileops.o filestat.o dirops.o sys_declarations.o	\
+	 connection.o							\
 	barrier.o lklops.o disk.o 
 
 

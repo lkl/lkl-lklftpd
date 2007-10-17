@@ -2,7 +2,6 @@
 #define LKLFTPD_CMDIO_H__
 
 #include <apr_errno.h>
-#include <apr_errno.h>
 #include "worker.h"
 #include "sess.h"
 
