@@ -10,6 +10,7 @@
 #include "config.h"
 #include "utils.h"
 #include "ftpcodes.h"
+#include "fileops.h"
 #include "cmdhandler.h"
 #include "sess.h"
 
@@ -39,7 +40,7 @@ static void init_username_related_fields(struct lfd_sess * sess)
 	sess->home_str = apr_pstrcat(sess->sess_pool, "/home/", sess->user, "/", NULL);
 	
 	//try to stat the directory. If it isn't accessible, fallback to the "/" root.
-	rc = apr_stat(&thisfinfo, sess->home_str, APR_FINFO_TYPE, sess->loop_pool);
+	rc = lkl_stat(&thisfinfo, sess->home_str, APR_FINFO_TYPE, sess->loop_pool);
 	if ( (APR_SUCCESS != rc) || (APR_DIR != thisfinfo.filetype) )
 		sess->home_str = "/";
 	
