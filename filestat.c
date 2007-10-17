@@ -133,7 +133,7 @@ apr_status_t lkl_file_info_get_locked(apr_finfo_t *finfo, apr_int32_t wanted,
                                       lkl_file_t *thefile)
 {
 	struct stat info;
-	apr_status_t ret;
+	apr_status_t rc;
 
 	if (thefile->buffered)
 	{
@@ -141,22 +141,22 @@ apr_status_t lkl_file_info_get_locked(apr_finfo_t *finfo, apr_int32_t wanted,
 		if (rv != APR_SUCCESS)
 			return rv;
 	}
-	ret = wrapper_sys_newfstat(thefile->filedes, &info);
-	if (!ret)
+	rc = wrapper_sys_newfstat(thefile->filedes, &info);
+	if (!rc)
 	{
 		finfo->pool = thefile->pool;
 		finfo->fname = thefile->fname;
 		fill_out_finfo(finfo, &info, wanted);
 		return (wanted & ~finfo->valid) ? APR_INCOMPLETE : APR_SUCCESS;
 	}
-	return ret;
+	return rc;
 }
 
 
 apr_status_t lkl_file_info_get(apr_finfo_t *finfo, apr_int32_t wanted, lkl_file_t *thefile)
 {
 	struct stat info;
-	int ret;
+	int rc;
 
 	if (thefile->buffered)
 	{
@@ -164,25 +164,25 @@ apr_status_t lkl_file_info_get(apr_finfo_t *finfo, apr_int32_t wanted, lkl_file_
 		if (rv != APR_SUCCESS)
 		return rv;
 	}
-	ret = wrapper_sys_newfstat(thefile->filedes, &info);
-	if (0 == ret)
+	rc = wrapper_sys_newfstat(thefile->filedes, &info);
+	if (0 == rc)
 	{
 		finfo->pool = thefile->pool;
 		finfo->fname = thefile->fname;
 		fill_out_finfo(finfo, &info, wanted);
 		return (wanted & ~finfo->valid) ? APR_INCOMPLETE : APR_SUCCESS;
 	}
-	return -ret;
+	return -rc;
 }
 
 apr_status_t lkl_file_perms_set(const char *fname, apr_fileperms_t perms)
 {
-	apr_status_t ret;
+	apr_status_t rc;
 	mode_t mode = lkl_unix_perms2mode(perms);
 
-	ret = wrapper_sys_chmod(fname, mode);
-	if (ret)
-		return -ret;
+	rc = wrapper_sys_chmod(fname, mode);
+	if (rc)
+		return -rc;
 
 	return APR_SUCCESS;
 }

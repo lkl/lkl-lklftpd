@@ -86,12 +86,12 @@ int linux_new_thread(int (*fn)(void*), void *arg, void *pti)
                 .arg = arg,
                 .pti = (struct _thread_info*)pti
         };
-        int ret;
+        int rc;
 
 	debug_thread_count++;
-        ret=apr_thread_create(&ktha.pti->thread, NULL, &kernel_thread_helper, &ktha, pool);
+        rc=apr_thread_create(&ktha.pti->thread, NULL, &kernel_thread_helper, &ktha, pool);
         apr_thread_mutex_lock(kth_mutex);
-        return ret;
+        return rc;
 }
 
 typedef struct {

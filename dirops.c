@@ -9,10 +9,10 @@
 static apr_status_t dir_cleanup(void *thedir)
 {
 	lkl_dir_t *dir = thedir;
-	apr_status_t ret;
+	apr_status_t rc;
 
-	ret = wrapper_sys_close(dir->fd);
-	return ret;
+	rc = wrapper_sys_close(dir->fd);
+	return rc;
 }
 
 apr_status_t lkl_dir_open(lkl_dir_t **new, const char *dirname,
@@ -45,19 +45,19 @@ apr_status_t lkl_dir_close(lkl_dir_t *thedir)
 apr_status_t lkl_dir_make(const char *path, apr_fileperms_t perm,
                           apr_pool_t *pool)
 {
-	apr_status_t ret;
+	apr_status_t rc;
 	mode_t mode = lkl_unix_perms2mode(perm);
 
-	ret = wrapper_sys_mkdir(path, mode);
-	return -ret;
+	rc = wrapper_sys_mkdir(path, mode);
+	return -rc;
 }
 
 apr_status_t lkl_dir_remove(const char *path, apr_pool_t *pool)
 {
-	apr_status_t ret;
+	apr_status_t rc;
 
-	ret = wrapper_sys_rmdir(path);
-	return -ret;
+	rc = wrapper_sys_rmdir(path);
+	return -rc;
 }
 
 
@@ -83,18 +83,18 @@ struct dirent * lkl_readdir(lkl_dir_t *thedir)
 apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, lkl_dir_t * thedir)
 {
 
-	apr_status_t ret = 0;
+	apr_status_t rc = 0;
 
     // We're about to call a non-thread-safe readdir()
 	thedir->entry = lkl_readdir(thedir);
 	if (NULL == thedir->entry)
-		ret = APR_ENOENT;
+		rc = APR_ENOENT;
 	finfo->fname = NULL;
 
-	if (ret)
+	if (rc)
 	{
 		finfo->valid = 0;
-		return ret;
+		return rc;
 	}
 
 	if (thedir->entry->d_ino && thedir->entry->d_ino != -1)
@@ -111,12 +111,12 @@ apr_status_t lkl_dir_read(apr_finfo_t * finfo, apr_int32_t wanted, lkl_dir_t * t
 		if ((fspec[off - 1] != '/') && (off + 1 < sizeof(fspec)))
 			fspec[off++] = '/';
 		apr_cpystrn(fspec + off, thedir->entry->d_name, sizeof(fspec) - off);
-		ret = lkl_stat(finfo, fspec, APR_FINFO_LINK | wanted, thedir->pool);
+		rc = lkl_stat(finfo, fspec, APR_FINFO_LINK | wanted, thedir->pool);
 		// We passed a stack name that will disappear
 		finfo->fname = NULL;
 	}
 
-	if (wanted && (APR_SUCCESS == ret || APR_INCOMPLETE == ret))
+	if (wanted && (APR_SUCCESS == rc || APR_INCOMPLETE == rc))
 	{
 		wanted &= ~finfo->valid;
 	}

@@ -55,20 +55,20 @@ apr_size_t lfd_ascii_bin_to_ascii(const char* p_in, char* p_out, apr_size_t in_l
  */
 struct ascii_to_bin_ret lfd_ascii_ascii_to_bin(char* p_buf, apr_size_t in_len, int prev_cr)
 {
-	struct ascii_to_bin_ret ret;
+	struct ascii_to_bin_ret rc;
 	apr_size_t indexx = 0;
 	apr_size_t written = 0;
 	char* p_out = p_buf + 1;
-	ret.last_was_cr = 0;
+	rc.last_was_cr = 0;
 	if (prev_cr && (!in_len || p_out[0] != '\n'))
 	{
 		p_buf[0] = '\r';
-		ret.p_buf = p_buf;
+		rc.p_buf = p_buf;
 		written++;
 	}
 	else
 	{
-		ret.p_buf = p_out;
+		rc.p_buf = p_out;
 	}
 	while (indexx < in_len)
 	{
@@ -80,7 +80,7 @@ struct ascii_to_bin_ret lfd_ascii_ascii_to_bin(char* p_buf, apr_size_t in_len, i
 		}
 		else if (indexx == in_len - 1)
 		{
-			ret.last_was_cr = 1;
+			rc.last_was_cr = 1;
 		}
 		else if (p_buf[indexx + 2] != '\n')
 		{
@@ -89,7 +89,7 @@ struct ascii_to_bin_ret lfd_ascii_ascii_to_bin(char* p_buf, apr_size_t in_len, i
 		}
 		indexx++;
 	}
-	ret.stored = written;
-	return ret;
+	rc.stored = written;
+	return rc;
 }
 

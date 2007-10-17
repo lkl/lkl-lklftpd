@@ -48,9 +48,9 @@ apr_status_t lfd_cmdio_write(struct lfd_sess * sess, int cmd, const char *msg, .
 	return rc;
 }
 
-apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str, char** p_arg_str)
+apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* sess, char** p_cmd_str, char** p_arg_str)
 {
-	apr_status_t		  ret;
+	apr_status_t		  rc;
 	char			* buffer;
 	char			* cmd_body, * cmd_arg;
 	char			* last;
@@ -61,17 +61,17 @@ apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str
 	cmd_body = NULL;
 	cmd_arg = NULL;
 
-	buffer = p_sess->cmd_input_buffer;
+	buffer = sess->cmd_input_buffer;
 	memset(buffer, '\0', cmd_input_buffer_len);
-	ret = apr_socket_recv(p_sess->comm_sock, buffer,&len);
+	rc = apr_socket_recv(sess->comm_sock, buffer,&len);
 
 	if (0 == len)
 	{
                 return APR_EOF;
 	}
-	if(APR_SUCCESS != ret)
+	if(APR_SUCCESS != rc)
 	{
-		return ret;
+		return rc;
 	}
 
 	// parse the command
@@ -83,10 +83,10 @@ apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* p_sess, char** p_cmd_str
 	}
 	else
 	{
-		ret = APR_INCOMPLETE;
+		rc = APR_INCOMPLETE;
 	}
 	*p_cmd_str = cmd_body;
 	*p_arg_str = cmd_arg;
 
-	return ret;
+	return rc;
 }

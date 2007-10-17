@@ -78,12 +78,12 @@ int linux_new_thread(int (*fn)(void*), void *arg, void *pti)
                 .arg = arg,
                 .pti = (struct _thread_info*)pti
         };
-        int ret;
+        int rc;
 
 	debug_thread_count++;
-        ret=pthread_create(&ktha.pti->th, NULL, kernel_thread_helper, &ktha);
+        rc=pthread_create(&ktha.pti->th, NULL, kernel_thread_helper, &ktha);
         pthread_mutex_lock(&kth_mutex);
-        return ret;
+        return rc;
 }
 
 typedef struct {

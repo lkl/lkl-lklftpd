@@ -50,10 +50,10 @@ apr_status_t lkl_file_flush(lkl_file_t *thefile)
 static apr_status_t file_cleanup(lkl_file_t *file)
 {
 	apr_status_t rv = APR_SUCCESS;
-	int ret;
+	int rc;
 
-	ret =  wrapper_sys_close(file->filedes);
-	if (0 == ret)
+	rc =  wrapper_sys_close(file->filedes);
+	if (0 == rc)
 	{
 		file->filedes = -1;
 		if (file->flags & APR_DELONCLOSE)
@@ -62,7 +62,7 @@ static apr_status_t file_cleanup(lkl_file_t *file)
 			rv = apr_thread_mutex_destroy(file->thlock);
 	}
 	else
-		rv = -ret;
+		rv = -rc;
 
 	return rv;
 }
@@ -600,19 +600,19 @@ apr_status_t lkl_file_eof(lkl_file_t *fptr)
 
 apr_status_t lkl_file_remove(const char *path, apr_pool_t *pool)
 {
-	apr_status_t ret;
+	apr_status_t rc;
 
-	ret = wrapper_sys_unlink(path);
-	return -ret;
+	rc = wrapper_sys_unlink(path);
+	return -rc;
 }
 
 apr_status_t lkl_file_rename(const char *from_path, const char *to_path,
 			apr_pool_t *pool)
 {
-	apr_status_t ret;
+	apr_status_t rc;
 
-	ret = wrapper_sys_rename(from_path, to_path);
-	return -ret;
+	rc = wrapper_sys_rename(from_path, to_path);
+	return -rc;
 }
 
 apr_status_t lkl_file_lock(lkl_file_t *thefile, int type)

@@ -15,12 +15,12 @@
 #include "sess.h"
 
 extern volatile apr_uint32_t ftp_must_exit;
-static apr_status_t emit_greeting(struct lfd_sess * p_sess)
+static apr_status_t emit_greeting(struct lfd_sess * sess)
 {
 	apr_status_t rc = APR_SUCCESS;
 	if(0 != strlen(lfd_config_banner_string))
 	{
-		rc = lfd_cmdio_write(p_sess, FTP_GREET, lfd_config_banner_string);
+		rc = lfd_cmdio_write(sess, FTP_GREET, lfd_config_banner_string);
 	}
 	return rc;
 }
@@ -47,7 +47,7 @@ static void init_username_related_fields(struct lfd_sess * sess)
 	sess->cwd_path = apr_pstrdup(sess->sess_pool, sess->home_str);
 }
 
-static apr_status_t get_username_password(struct lfd_sess* p_sess)
+static apr_status_t get_username_password(struct lfd_sess* sess)
 {
 	apr_status_t rc;
 	int pass_ok = 0, user_ok = 0;
@@ -56,52 +56,52 @@ static apr_status_t get_username_password(struct lfd_sess* p_sess)
 
 	do
 	{
-		rc = lfd_cmdio_get_cmd_and_arg(p_sess, &p_sess->ftp_cmd_str, &p_sess->ftp_arg_str);
+		rc = lfd_cmdio_get_cmd_and_arg(sess, &sess->ftp_cmd_str, &sess->ftp_arg_str);
 		if(APR_SUCCESS != rc)
 			return rc;
 
-		if(lfd_cmdio_cmd_equals(p_sess, "USER"))
+		if(lfd_cmdio_cmd_equals(sess, "USER"))
 		{
-			user_ok = handle_user_cmd(p_sess);
+			user_ok = handle_user_cmd(sess);
 		}
 		else
 		{
 			// unknown command; send error message
-			lfd_cmdio_write(p_sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
+			lfd_cmdio_write(sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
 			continue; //don't ask for the password
 		}
 
-		lfd_cmdio_write(p_sess, FTP_GIVEPWORD, "Password required for user.");
+		lfd_cmdio_write(sess, FTP_GIVEPWORD, "Password required for user.");
 
-		rc = lfd_cmdio_get_cmd_and_arg(p_sess, &p_sess->ftp_cmd_str, &p_sess->ftp_arg_str);
+		rc = lfd_cmdio_get_cmd_and_arg(sess, &sess->ftp_cmd_str, &sess->ftp_arg_str);
 		if(APR_SUCCESS != rc)
 			return rc;
 
-		if(lfd_cmdio_cmd_equals(p_sess, "PASS"))
+		if(lfd_cmdio_cmd_equals(sess, "PASS"))
 		{
-			pass_ok = handle_pass_cmd(p_sess);
+			pass_ok = handle_pass_cmd(sess);
 			if(pass_ok && user_ok)
 			{
-				lfd_cmdio_write(p_sess, FTP_LOGINOK, "LOGIN OK.");
+				lfd_cmdio_write(sess, FTP_LOGINOK, "LOGIN OK.");
 				break;
 			}
 		}
 		else
 		{
 			// unknown command; send error message
-			lfd_cmdio_write(p_sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
+			lfd_cmdio_write(sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
 			continue;
 		}
 
 		nr_tries ++;
-		lfd_cmdio_write(p_sess, FTP_LOGINERR, "Incorrect login credentials.");
+		lfd_cmdio_write(sess, FTP_LOGINERR, "Incorrect login credentials.");
 	}
 	while(nr_tries < lfd_config_max_login_attempts);
 
 	if (nr_tries >= lfd_config_max_login_attempts)
 		return APR_EINVAL;
 
-	init_username_related_fields(p_sess);
+	init_username_related_fields(sess);
 
 	return APR_SUCCESS;
 }
