@@ -31,9 +31,19 @@ static int lfd_cmdio_cmd_equals(struct lfd_sess*sess, const char * cmd)
 
 static void init_username_related_fields(struct lfd_sess * sess)
 {
+	apr_status_t rc;
+	apr_finfo_t thisfinfo;
 	sess->user = apr_pstrdup(sess->sess_pool, sess->user);
+	
+	//TODO: ### This is Linux centric! Make it go to the propper directory on windows.
 	sess->home_str = apr_pstrcat(sess->sess_pool, "/home/", sess->user, "/", NULL);
-	sess->rel_path = "/";
+	
+	//try to stat the directory. If it isn't accessible, fallback to the "/" root.
+	rc = apr_stat(&thisfinfo, sess->home_str, APR_FINFO_TYPE, sess->loop_pool);
+	if ( (APR_SUCCESS != rc) || (APR_DIR != thisfinfo.filetype) )
+		sess->home_str = "/";
+	
+	sess->cwd_path = apr_pstrdup(sess->sess_pool, sess->home_str);
 }
 
 static apr_status_t get_username_password(struct lfd_sess* p_sess)

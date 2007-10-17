@@ -31,11 +31,10 @@ struct lfd_sess
 	char			* user;				// the user's name for this session
 	//TODO:### decide if this is needed:
 	//char			* passwd;			// user's password for this session
-	char			* home_str;			// user's home directory. ALWAYS WITH A TRAILING SLASH!
+	char			* home_str;			// user's home directory. ALWAYS ENDING WITH A TRAILING SLASH! Used when expanding the "~" in a path.
 	char			* ftp_cmd_str;			// command body
 	char			* ftp_arg_str;			// command argument
-	char			* rel_path;			// the path relative to the user's home directory - it may be
-								// changed by the user;
+	char			* cwd_path;			// the user's current working directory
 	apr_socket_t		* pasv_listen_fd;		//PASSIVE listen descriptor. The data socket is determined by accepting a socket on this listening socket.
 	apr_sockaddr_t		* p_port_sockaddr;		//port configured by PORT to be used in active connections. The data socket is obtained by connecting a socket to this address
 	apr_off_t		  restart_pos;			//REST value.

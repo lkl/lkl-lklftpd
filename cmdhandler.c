@@ -22,7 +22,16 @@ const unsigned char * lkl_str_parse_uchar_string_sep(char *, char, unsigned char
 int handle_user_cmd(struct lfd_sess* p_sess)
 {
 	//###: any user is accepted
+	//we're allocating from the loop pool for now. 
+	// Allocate from the sess pool when the user logs in successfully
 	p_sess->user = apr_pstrdup(p_sess->loop_pool, p_sess->ftp_arg_str);
+	
+	//sanitize the input: We don't accept usernames with '/' in the name 
+	// because we use the name to determine the home directory as in 
+	// "/home/%USERNAME%" and a slash in the name will point to a subdirectory
+	// of another user.
+	if(strchr(p_sess->user, '/'))
+		return 0;
 	return 1;
 }
 
@@ -34,7 +43,7 @@ int handle_pass_cmd(struct lfd_sess* p_sess)
 
 static apr_status_t bind_to_random_passive_port(struct lfd_sess * sess, apr_sockaddr_t	** psaddr, apr_port_t * pport)
 {
-	apr_port_t 	bind_retries = 10;
+	apr_port_t 	bind_retries = lfd_config_max_sockets_to_try_to_bind;
 	apr_port_t	min_port = (lfd_config_min_pasv_port < 1023 ) ? 1024  : lfd_config_min_pasv_port;
 	apr_port_t	max_port = (lfd_config_min_pasv_port > 65535) ? 65535 : lfd_config_max_pasv_port;
 	apr_port_t	rand_port;
@@ -65,12 +74,8 @@ static apr_status_t bind_to_random_passive_port(struct lfd_sess * sess, apr_sock
 		{
 			continue;
 		}
+		
 		rc = apr_socket_opt_set(listen_fd, APR_SO_REUSEADDR, 1);
-		if(APR_SUCCESS != rc)
-		{
-			continue;
-		}
-		rc = apr_socket_opt_set(listen_fd, APR_SO_NONBLOCK, 1);
 		if(APR_SUCCESS != rc)
 		{
 			continue;
@@ -181,106 +186,141 @@ apr_status_t handle_abort(struct lfd_sess* p_sess)
 	return APR_SUCCESS;
 }
 
-static char * get_abs_path(struct lfd_sess *p_sess)
+
+static char * resolve_tilde(const char * str, struct lfd_sess* p_sess, apr_pool_t * allocator_pool)
+{
+	size_t len;
+	len = strlen(str);
+	
+	if (NULL == str)
+		return NULL;
+	
+	
+	if (len > 0 && '~' == str[0])
+	{
+		if (1 == len)
+		{
+			return apr_pstrdup(allocator_pool, p_sess->home_str);
+		}
+		else if('/' == str[1])
+		{
+			return apr_pstrcat(allocator_pool, p_sess->home_str, str+2, NULL);
+		}
+		else
+		{
+			//we don't support ~asdf kind of paths.
+			return NULL;
+		}
+	}
+	return apr_pstrdup(allocator_pool, str);
+}
+
+static char * get_abs_path(struct lfd_sess *p_sess, apr_pool_t * allocator_pool)
 {
 	char * path;
 
-	if('/' == *(p_sess->ftp_arg_str))
-		path = apr_pstrdup(p_sess->loop_pool, p_sess->ftp_arg_str);
+	if ( (NULL == p_sess->ftp_arg_str) || ('\0' == p_sess->ftp_arg_str[0]) )
+		return NULL;
+	
+	//this is only temp, so allocating from loop_pool is fine.
+	path = resolve_tilde(p_sess->ftp_arg_str, p_sess, p_sess->loop_pool);
+	
+	if (NULL == path)
+		return NULL;
+	
+	
+	//TODO: this is Linux centric
+	if('/' == path[0])
+	{
+		//the path is already absolute, 
+		// just need to allocate it from an appropriate pool
+		path = apr_pstrdup(allocator_pool, path);
+	}
 	else
-		if(0 == apr_strnatcmp(p_sess->rel_path, "/"))
-			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->ftp_arg_str, NULL);
-	else
-		path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1,"/", p_sess->ftp_arg_str, NULL);
+	{
+		path = apr_pstrcat(allocator_pool, p_sess->cwd_path, path, NULL);
+	}
+	
+	//TODO: remove double (or more) "/" from the path
 	return path;
 }
 
-static char * get_rel_path(struct lfd_sess *p_sess)
-{
-	char *rpath;
 
-	if('/' == *(p_sess->ftp_arg_str))
-		rpath = p_sess->ftp_arg_str;
-	else
-	{
-		if( 0 == apr_strnatcmp(p_sess->rel_path, "/"))
-			rpath = apr_pstrcat(p_sess->loop_pool,"/", p_sess->ftp_arg_str,NULL);
-		else
-			rpath = apr_pstrcat(p_sess->loop_pool,p_sess->rel_path,"/", p_sess->ftp_arg_str, NULL);
-	}
-	return rpath;
-}
+
 
 apr_status_t handle_dir_remove(struct lfd_sess *p_sess)
 {
-	apr_status_t ret;
-	char * path ,*rpath;
+	apr_status_t rc;
+	char * rpath;
 
-	ret = APR_SUCCESS;
+	rc = APR_SUCCESS;
 	if(NULL == p_sess->ftp_arg_str)
 	{
-		ret = lfd_cmdio_write(p_sess, FTP_BADCMD, "Command must have an argument.");
-		return ret;
+		rc = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "Command must have an argument.");
+		return rc;
 	}
+	
 	// check to see if p_sess->ftp_arg_str is an absolute or relative path
-	rpath = get_rel_path(p_sess);
+	rpath = get_abs_path(p_sess, p_sess->loop_pool);
 	if(NULL == rpath)
 	{
-		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
+		lfd_cmdio_write(p_sess, FTP_FILEFAIL, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
-
-	path = apr_pstrcat(p_sess->loop_pool,p_sess->home_str, rpath+1, NULL);
-	ret = lkl_dir_remove(path,p_sess->loop_pool);
-
-	if(APR_SUCCESS !=ret)
+	
+	rc = lkl_dir_remove(rpath, p_sess->loop_pool);
+	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "lkl_dir_remove failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
-		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot remove directory %s.", rpath);
+		lfd_log(LFD_ERROR, "lkl_dir_remove failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(p_sess, rc));
+		rc = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "Cannot remove directory %s.", rpath);
 	}
 	else
-		ret = lfd_cmdio_write(p_sess, FTP_MKDIROK, "%s Directory deleted.",rpath);
-
-	return ret;
+	{
+		rc = lfd_cmdio_write(p_sess, FTP_RMDIROK, "%s Directory deleted.",rpath);
+	}
+	
+	return rc;
 }
 
 apr_status_t handle_dir_create(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
-	char * path ,*rpath;
+	char *rpath;
 	apr_finfo_t finfo;
 
 	ret = APR_SUCCESS;
 	if(NULL == p_sess->ftp_arg_str)
 	{
-		ret = lfd_cmdio_write(p_sess, FTP_BADCMD, "Command must have an argument.");
+		ret = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "Command must have an argument.");
 		return ret;
 	}
+	
 	// check to see if p_sess->ftp_arg_str is an absolute or relative path
-	rpath = get_rel_path(p_sess);
+	rpath = get_abs_path(p_sess, p_sess->loop_pool);
 	if(NULL == rpath)
 	{
-		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
+		lfd_cmdio_write(p_sess, FTP_FILEFAIL, "The server has encountered an error processing the path.");
 		return APR_EINVAL;
 	}
 
-	path = apr_pstrcat(p_sess->loop_pool,p_sess->home_str, rpath+1, NULL);
-	ret = lkl_stat(&finfo, path, APR_FINFO_TYPE, p_sess->loop_pool);
-	if((APR_SUCCESS == ret) && (APR_DIR == finfo.filetype))
+	ret = lkl_stat(&finfo, rpath, APR_FINFO_TYPE, p_sess->loop_pool);
+	if (APR_SUCCESS == ret)
 	{
-		ret = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "%s Directory exists.", p_sess->ftp_arg_str);
+		ret = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "%s Directory exists.", rpath);
 		return ret;
 	}
-	ret = lkl_dir_make(path, APR_FPROT_OS_DEFAULT, p_sess->loop_pool);
+	ret = lkl_dir_make(rpath, APR_FPROT_OS_DEFAULT, p_sess->loop_pool);
 
 	if(APR_SUCCESS !=ret)
 	{
 		lfd_log(LFD_ERROR, "lkl_dir_make failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
-		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot create directory %s.", rpath);
+		ret = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "Cannot create directory %s.", rpath);
 	}
 	else
+	{
 		ret = lfd_cmdio_write(p_sess, FTP_MKDIROK, "%s Directory created.", rpath);
-
+	}
+	
 	return ret;
 }
 
@@ -288,7 +328,7 @@ apr_status_t handle_pwd(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
 
-	ret = lfd_cmdio_write(p_sess, FTP_PWDOK,p_sess->rel_path);
+	ret = lfd_cmdio_write(p_sess, FTP_PWDOK, p_sess->cwd_path);
 	return ret;
 }
 
@@ -297,71 +337,81 @@ apr_status_t handle_cwd(struct lfd_sess *p_sess)
 	apr_status_t ret;
 	char * path;
 	apr_finfo_t finfo;
+	size_t len;
 
 	ret = APR_SUCCESS;
 	if(NULL == p_sess->ftp_arg_str)
 	{
-		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Command must have an argument.");
+		ret = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "Command must have an argument.");
 		return ret;
 	}
-
-	path = get_abs_path(p_sess);
-
+	
+	if (0 == strcmp(p_sess->ftp_arg_str, ".."))
+	{
+		return handle_cdup(p_sess);
+	}
+	
+	path = get_abs_path(p_sess, p_sess->loop_pool);
 	if(NULL == path)
 	{
-		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
+		lfd_cmdio_write(p_sess, FTP_FILEFAIL, "The server has encountered an error processing the path");
 		return APR_EINVAL;
 	}
+	
+	
+	//assure that the last character is a slash
+	len = strlen(path);
+	if('/' != path[len-1])
+	{
+		path = apr_pstrcat(p_sess->loop_pool, path, "/", NULL);
+	}
+	
 	// verify that the path represents a valid directory
 	ret = lkl_stat(&finfo, path, APR_FINFO_TYPE, p_sess->loop_pool);
 	if((APR_SUCCESS != ret) || (APR_DIR != finfo.filetype))
 	{
 		lfd_log(LFD_ERROR, "lkl_stat failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
-		ret = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "%s is not a directory.", p_sess->ftp_arg_str);
+		ret = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "%s is not a directory.", path);
 		return ret;
 	}
 
-	// add to the current rel_path ftp_arg_str
-	if('/' == *(p_sess->ftp_arg_str))
-		p_sess->rel_path = apr_pstrdup(p_sess->sess_pool,p_sess->ftp_arg_str);
-	else if( 0 == apr_strnatcmp(p_sess->rel_path,"/"))
-		p_sess->rel_path = apr_pstrcat(p_sess->sess_pool,"/", p_sess->ftp_arg_str,NULL);
-	else
-		p_sess->rel_path = apr_pstrcat(p_sess->sess_pool, p_sess->rel_path,"/", p_sess->ftp_arg_str, NULL);
-
-	ret = lfd_cmdio_write(p_sess, FTP_CWDOK, "Directory changed to %s.", p_sess->rel_path);
-
-	return ret;
+	//allocate from a persistent pool
+	p_sess->cwd_path = apr_pstrdup(p_sess->sess_pool, path);
+	
+	return lfd_cmdio_write(p_sess, FTP_CWDOK, "Directory changed to %s.", p_sess->cwd_path);
 }
 
 apr_status_t handle_cdup(struct lfd_sess *p_sess)
 {
 	apr_status_t ret;
-	char * pos, * last;
-
+	char * pos;
+	size_t len;
 	ret = APR_SUCCESS;
-	// shouldn't have an argument
+	
+	// DOESN'T have an argument
+	
 	// changes the current directory with it's parent
-	if(0 == apr_strnatcmp( p_sess->rel_path, "/"))
+	//TODO: this is Linux centric.
+	
+	len = strlen(p_sess->cwd_path);
+	if(1 == len)
 	{
-		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Already in root directory.");
-		return ret;
+		return lfd_cmdio_write(p_sess, FTP_ALLOOK, "Already in root directory.");
 	}
-	pos = p_sess->rel_path;
-	last = pos;
-	while(*pos)
+	
+	pos = p_sess->cwd_path + len - 2; //without '\0' and '/' from the end of the path
+	//go backwards towards the root of the path
+	while(pos != p_sess->cwd_path)
 	{
-		if(*pos == '/')
-			last = pos;
-		pos++;
+		if ('/' == pos[0])
+		{
+			pos[1] = '\0';
+			break;
+		}
+		pos --;
 	}
-	// end the string here, before pos
-	if(last == p_sess->rel_path)
-		p_sess->rel_path = "/";
-	else
-		*last = '\0';
-
-	ret = lfd_cmdio_write(p_sess, FTP_ALLOOK, "Changed to directory %s.",p_sess->rel_path);
+	
+	ret = lfd_cmdio_write(p_sess, FTP_ALLOOK, "Changed to directory %s.", p_sess->cwd_path);
 	return ret;
 }
 
@@ -375,14 +425,14 @@ apr_status_t handle_rnfr(struct lfd_sess *p_sess, char ** temp_path)
 	ret = APR_SUCCESS;
 	if(NULL == p_sess->ftp_arg_str)
 	{
-		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Bad command argument.");
+		ret = lfd_cmdio_write(p_sess, FTP_FILEFAIL, "Bad command argument.");
 		return ret;
 	}
-	path = get_abs_path(p_sess);
+	path = get_abs_path(p_sess, p_sess->sess_pool);
 
 	if(NULL == path)
 	{
-		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
+		lfd_cmdio_write(p_sess, FTP_FILEFAIL, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
 
@@ -418,14 +468,14 @@ apr_status_t handle_rnto(struct lfd_sess *p_sess, char * old_path)
 	}
 
 	// obtain the new path and call lkl_file_rename
-	path = get_abs_path(p_sess);
+	path = get_abs_path(p_sess, p_sess->loop_pool);
 
 	ret = lkl_file_rename(old_path, path, p_sess->loop_pool);
 
 	if(APR_SUCCESS != ret)
 	{
 		lfd_log(LFD_ERROR, "lkl_file_rename failed with errorcode[%d] and error message[%s]", ret, lfd_sess_strerror(p_sess, ret));
-		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot rename directory/file %s.", p_sess->ftp_arg_str);
+		ret = lfd_cmdio_write(p_sess, FTP_BADOPTS, "Cannot rename directory/file %s.", path);
 	}
 	else
 		ret = lfd_cmdio_write(p_sess, FTP_RENAMEOK, "Directory/file was succesfully renamed.");
@@ -434,6 +484,7 @@ apr_status_t handle_rnto(struct lfd_sess *p_sess, char * old_path)
 
 apr_status_t handle_type(struct lfd_sess *sess)
 {
+	//TODO: check if this is sufficient
 	lfd_cmdio_write(sess, FTP_TYPEOK, "TYPE ok");
 	return APR_SUCCESS;
 }
@@ -485,15 +536,16 @@ const unsigned char * lkl_str_parse_uchar_string_sep(char * input_str, char sep,
 
 static void port_cleanup(struct lfd_sess* p_sess)
 {
+	//there is no resource to free() except the allocated memory 
+	// which will be freed when the pool gets destroyed
 	p_sess->p_port_sockaddr = NULL;
-	//vsf_sysutil_sockaddr_clear(&p_sess->p_port_sockaddr);
 }
 
 static void pasv_cleanup(struct lfd_sess* p_sess)
 {
 	if (NULL != p_sess->pasv_listen_fd)
 	{
-		apr_socket_close(p_sess->pasv_listen_fd);
+		(void) apr_socket_close(p_sess->pasv_listen_fd);
 		p_sess->pasv_listen_fd = NULL;
 	}
 }
@@ -579,28 +631,6 @@ static int data_transfer_checks_ok(struct lfd_sess* p_sess)
 	return 1;
 }
 
-static void resolve_tilde(char ** p_str, struct lfd_sess* p_sess)
-{
-	unsigned int len;
-	char * str;
-
-	if (NULL == p_str)
-		return;
-	str = *p_str;
-	len = strlen(str);
-
-	if (len > 0 && '~' == str[0])
-	{
-		if (1 == len)
-		{
-			*p_str = apr_pstrdup(p_sess->sess_pool, p_sess->home_str);
-		}
-		else if('/' == str[1])
-		{
-			*p_str = apr_pstrcat(p_sess->sess_pool, p_sess->home_str, str+2, NULL);
-		}
-	}
-}
 
 static void init_data_sock_params(struct lfd_sess* p_sess, apr_socket_t * sock_fd)
 {
@@ -657,8 +687,8 @@ static apr_status_t get_bound_and_connected_ftp_pasv_sock(struct lfd_sess* p_ses
 {
 	apr_pollfd_t	poolfd;
 	apr_int32_t	nsds;
-	apr_status_t	rc;
-	int 		nr_tries = 2;
+	apr_status_t	rc = APR_SUCCESS;
+	int 		nr_tries = lfd_config_pasv_max_accept_tries;
 	
 	poolfd.p         = p_sess->loop_pool;
 	poolfd.desc_type = APR_POLL_SOCKET;
@@ -666,24 +696,38 @@ static apr_status_t get_bound_and_connected_ftp_pasv_sock(struct lfd_sess* p_ses
 	poolfd.rtnevents = 0;
 	poolfd.desc.s    = p_sess->pasv_listen_fd;
 	
-	while(-- nr_tries)
+	while( nr_tries )
 	{
-		poolfd.rtnevents = 0;
-		rc = apr_poll(&poolfd, 1, &nsds, apr_time_from_sec(1));
-		if ( APR_STATUS_IS_TIMEUP(rc) || APR_STATUS_IS_EINTR(rc) )
-			continue;
-		if ( (APR_SUCCESS == rc) && (APR_POLLIN & poolfd.rtnevents) )
-			break;
+		while( (-- nr_tries) && (APR_SUCCESS == rc) )
+		{
+			poolfd.rtnevents = 0;
+			rc = apr_poll(&poolfd, 1, &nsds, apr_time_from_sec(lfd_config_pasv_listen_socket_timeout));
+			if ( APR_STATUS_IS_TIMEUP(rc) || APR_STATUS_IS_EINTR(rc) )
+			{
+				rc = APR_SUCCESS;
+				continue;
+			}
+			//if there is no error but, there isn't anyone trying to connect to us
+			if ( (APR_SUCCESS == rc) && (0 == (APR_POLLIN & poolfd.rtnevents)) )
+				continue;
 			
-		//an unrecoverable error occured
-		lfd_log(LFD_ERROR, "get_bound_and_connected_ftp_pasv_sock: apr_poll failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
-		return rc;
-	}
-	
-	if(!nr_tries)
-		return APR_ENOSOCKET;
-	
-	return apr_socket_accept(psock, p_sess->pasv_listen_fd, p_sess->sess_pool);
+			//on other errors or when someone wants to connect to us break
+			break;
+		}
+		
+		
+		if ( (APR_SUCCESS == rc) && (APR_POLLIN & poolfd.rtnevents) )
+		{
+			//we exited and we have an outstanding socket to accept.
+			rc = apr_socket_accept(psock, p_sess->pasv_listen_fd, p_sess->sess_pool);
+			if( APR_SUCCESS == rc )
+				break;
+		}
+		rc = APR_ENOSOCKET;
+	}	
+	//remove all information related to the passive listening socket.
+	pasv_cleanup(p_sess);
+	return rc;
 }
 
 static apr_status_t lfd_ftpdataio_get_pasv_fd(struct lfd_sess* p_sess, apr_socket_t ** psock)
@@ -882,7 +926,7 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 	apr_socket_t		* remote_fd;
 	apr_finfo_t		  finfo;
 	struct lfd_transfer_ret   trans_ret;
-
+	char 			* path;
 	sess->restart_pos = 0;
 
 	if(NULL == sess->ftp_arg_str)
@@ -900,18 +944,17 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 		lfd_cmdio_write(sess, FTP_FILEFAIL, "No support for resume of ASCII transfer.");
 		return APR_EINVAL;
 	}
-	resolve_tilde(&sess->ftp_arg_str, sess);
+	
+	path = get_abs_path(sess, sess->loop_pool);
 
-	rc = lkl_file_open(&file, sess->ftp_arg_str, APR_FOPEN_READ|APR_FOPEN_BINARY, 0, sess->loop_pool);
-	// build the complete file path here -TODO - use get_abs_path(sess)
-
-	rc = lkl_file_open(&file, sess->ftp_arg_str, APR_FOPEN_READ|APR_FOPEN_BINARY|APR_FOPEN_LARGEFILE|APR_FOPEN_SENDFILE_ENABLED, 0, sess->loop_pool);
+	rc = lkl_file_open(&file, path, APR_FOPEN_READ|APR_FOPEN_BINARY|APR_FOPEN_LARGEFILE|APR_FOPEN_SENDFILE_ENABLED, 0, sess->loop_pool);
 	if(APR_SUCCESS != rc)
 	{
 		lfd_cmdio_write(sess, FTP_FILEFAIL, "Failed to open file.");
 		return rc;
 	}
-	rc = lkl_stat(&finfo, sess->ftp_arg_str, APR_FINFO_TYPE|APR_FINFO_SIZE, sess->loop_pool);
+	
+	rc = lkl_stat(&finfo, path, APR_FINFO_TYPE|APR_FINFO_SIZE, sess->loop_pool);
 	if((APR_SUCCESS != rc) || (APR_REG != finfo.filetype))
 	{
 		lfd_cmdio_write(sess, FTP_FILEFAIL, (APR_SUCCESS == rc)?"File type is not of regular type":"Failed to stat file.");
@@ -931,7 +974,7 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 
 	msg = apr_psprintf(sess->loop_pool, "Opening %s %s %s %s %u %s",
 			sess->is_ascii?"ASCII":"BINARY", " mode data connection for ",
-			sess->ftp_arg_str, " ( ", (unsigned int)finfo.size, " bytes).");
+   			path, " ( ", (unsigned int)finfo.size, " bytes).");
 
 
 	remote_fd = get_remote_transfer_fd(sess, msg);
@@ -978,7 +1021,7 @@ apr_status_t handle_dele(struct lfd_sess * p_sess)
 		return ret;
 	}
 
-	path = get_abs_path(p_sess);
+	path = get_abs_path(p_sess, p_sess->loop_pool);
 
 	if(NULL == path)
 	{
@@ -1099,7 +1142,7 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 	lkl_file_t 		* file;
 	apr_socket_t		* remote_fd;
 	struct lfd_transfer_ret   trans_ret;
-
+	char 			* path;
 	sess->restart_pos = 0;
 
 	if(NULL == sess->ftp_arg_str)
@@ -1112,14 +1155,15 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 	{
 		return APR_EINVAL;
 	}
-	resolve_tilde(&sess->ftp_arg_str, sess);
+	path = get_abs_path(sess, sess->loop_pool);
+
 	if (is_unique)
 	{
-		filename = get_unique_filename(sess->ftp_arg_str, sess->loop_pool);
+		filename = get_unique_filename(path, sess->loop_pool);
 	}
 	else
 	{
-		filename = sess->ftp_arg_str;
+		filename = path;
 	}
 
 	flags = APR_FOPEN_CREATE | APR_FOPEN_WRITE | APR_FOPEN_APPEND | APR_FOPEN_BINARY;
@@ -1285,18 +1329,19 @@ apr_status_t handle_list(struct lfd_sess *p_sess)
 	{
 		if (p_sess->ftp_arg_str != NULL)
 			la=1;
-		if('/' == *p_sess->rel_path)
-			path = apr_pstrcat(p_sess->loop_pool, p_sess->rel_path, NULL);
-		else
-			path = apr_pstrcat(p_sess->loop_pool, p_sess->home_str, p_sess->rel_path+1,NULL);
+		path = apr_pstrdup(p_sess->loop_pool, p_sess->cwd_path);
 	}
 	else
-		path = get_abs_path(p_sess);
+	{
+		path = get_abs_path(p_sess, p_sess->loop_pool);
+	}
+	
 	if(NULL == path)
 	{
 		lfd_cmdio_write(p_sess, FTP_BADOPTS, "The server has encountered an error.");
 		return APR_EINVAL;
 	}
+	
 	ret = list_dir(path, p_sess->loop_pool, &file_list, la);
 	if(APR_SUCCESS != ret)
 	{
