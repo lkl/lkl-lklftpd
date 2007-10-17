@@ -141,7 +141,7 @@ apr_status_t lkl_file_info_get_locked(apr_finfo_t *finfo, apr_int32_t wanted,
 		if (rv != APR_SUCCESS)
 			return rv;
 	}
-	ret = sys_newfstat(thefile->filedes, &info);
+	ret = wrapper_sys_newfstat(thefile->filedes, &info);
 	if (!ret)
 	{
 		finfo->pool = thefile->pool;
@@ -164,7 +164,7 @@ apr_status_t lkl_file_info_get(apr_finfo_t *finfo, apr_int32_t wanted, lkl_file_
 		if (rv != APR_SUCCESS)
 		return rv;
 	}
-	ret = sys_newfstat(thefile->filedes, &info);
+	ret = wrapper_sys_newfstat(thefile->filedes, &info);
 	if (0 == ret)
 	{
 		finfo->pool = thefile->pool;
@@ -180,7 +180,7 @@ apr_status_t lkl_file_perms_set(const char *fname, apr_fileperms_t perms)
 	apr_status_t ret;
 	mode_t mode = lkl_unix_perms2mode(perms);
 
-	ret = sys_chmod(fname, mode);
+	ret = wrapper_sys_chmod(fname, mode);
 	if (ret)
 		return -ret;
 
@@ -258,7 +258,7 @@ apr_status_t lkl_file_mtime_set(const char *fname, apr_time_t mtime,
 		tvp[1].tv_sec = apr_time_sec(mtime);
 		tvp[1].tv_usec = apr_time_usec(mtime);
 
-		status = sys_utimes(fname, tvp);
+		status = wrapper_sys_utimes(fname, tvp);
 		if (status)
 			return status;
 	}
@@ -272,9 +272,9 @@ apr_status_t lkl_stat(apr_finfo_t *finfo,const char *fname, apr_int32_t wanted, 
 
 	memset(&info,0,sizeof(struct stat));
 	if (wanted & APR_FINFO_LINK)
-		srv = sys_newlstat((char*)fname, &info);
+		srv = wrapper_sys_newlstat((char*)fname, &info);
 	else
-		srv = sys_newstat((char*)fname, &info);
+		srv = wrapper_sys_newstat((char*)fname, &info);
 
 	if (0 == srv)
 	{
