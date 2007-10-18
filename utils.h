@@ -25,7 +25,5 @@ struct ascii_to_bin_ret
 };
 struct ascii_to_bin_ret lfd_ascii_ascii_to_bin(char* p_in, apr_size_t in_len, int prev_cr);
 apr_size_t lfd_ascii_bin_to_ascii(const char* p_in, char* p_out, apr_size_t in_len);
-
-const unsigned char * lkl_str_parse_uchar_string_sep(char * input_str, char sep, unsigned char* p_items, unsigned int items);
 #endif//LKLFTPD_UTILS_H__
 

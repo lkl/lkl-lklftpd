@@ -18,7 +18,7 @@
 extern volatile apr_uint32_t ftp_must_exit;
 static apr_status_t emit_greeting(struct lfd_sess * sess)
 {
-	apr_status_t rc = APR_SUCCESS;
+	apr_status_t	rc = APR_SUCCESS;
 	if(0 != strlen(lfd_config_banner_string))
 	{
 		rc = lfd_cmdio_write(sess, FTP_GREET, lfd_config_banner_string);
@@ -33,8 +33,8 @@ static int lfd_cmdio_cmd_equals(struct lfd_sess*sess, const char * cmd)
 
 static void init_username_related_fields(struct lfd_sess * sess)
 {
-	apr_status_t rc;
-	apr_finfo_t thisfinfo;
+	apr_status_t 	rc;
+	apr_finfo_t	thisfinfo;
 	sess->user = apr_pstrdup(sess->sess_pool, sess->user);
 	
 	//TODO: ### This is Linux centric! Make it go to the propper directory on windows.
@@ -50,9 +50,9 @@ static void init_username_related_fields(struct lfd_sess * sess)
 
 static apr_status_t get_username_password(struct lfd_sess* sess)
 {
-	apr_status_t rc;
-	int pass_ok = 0, user_ok = 0;
-	int nr_tries = 0;
+	apr_status_t	rc;
+	int		pass_ok = 0, user_ok = 0;
+	int		nr_tries = 0;
 
 
 	do

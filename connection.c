@@ -92,6 +92,49 @@ static apr_status_t bind_to_random_passive_port(struct lfd_sess * sess, apr_sock
 	return rc;
 }
 
+/**
+ *@brief parses a string of delimited numbers between 0 and 255 and stores them in the p_items buffer
+ */
+const unsigned char * lfd_str_parse_uchar_string_sep(char * input_str, char sep, unsigned char* p_items, unsigned int items)
+{
+	char * last, * str;
+	unsigned int i;
+	apr_status_t rc;
+	char sep_str[] = " ";
+	sep_str[0] = sep;
+
+	last = input_str;
+	for (i = 0; i < items; i++)
+	{
+		apr_off_t this_number;
+
+		str = apr_strtok(input_str, sep_str, &last);
+		if((NULL == str) || ('\0' == *str))
+			return 0;
+
+		/* Sanity - check for too many or two few tokens! */
+		if (    (i <  (items-1) && (0 == strlen(last))) ||
+				       (i == (items-1) && (0 != strlen(last))))
+		{
+			return 0;
+		}
+
+		rc = apr_strtoff(&this_number, input_str, NULL, 10);
+		if(APR_SUCCESS != rc)
+			return 0;
+
+		// validate range fits into one byte
+		if(this_number < 0 || this_number > 255)
+			return 0;
+
+		/* If this truncates from int to uchar, we don't care */
+		p_items[i] = (unsigned char) this_number;
+
+		/* The right hand side of the comma now becomes the new string to breakdown */
+		input_str = last;
+	}
+	return p_items;
+}
 
 
 apr_status_t handle_pasv(struct lfd_sess * sess)
@@ -124,7 +167,7 @@ apr_status_t handle_pasv(struct lfd_sess * sess)
 	}
 	
 	// fill the first 4 elemnts of vals with the numbers from the IP address
-	lkl_str_parse_uchar_string_sep(addr, '.', vals, 4);
+	lfd_str_parse_uchar_string_sep(addr, '.', vals, 4);
 	
 	// append the decomposed port number
 	vals[4] = (unsigned char) (port >> 8);
@@ -149,7 +192,7 @@ apr_status_t handle_port(struct lfd_sess* sess)
 
 	// the received command argumet is a string of the form:
 	// ip1,ip2,ip3,ip4,po1,po2 - representing the remote host's IP and port number.
-	p_raw = lkl_str_parse_uchar_string_sep(sess->ftp_arg_str, ',', vals, sizeof(vals));
+	p_raw = lfd_str_parse_uchar_string_sep(sess->ftp_arg_str, ',', vals, sizeof(vals));
 	if (p_raw == 0)
 	{
 		lfd_cmdio_write(sess, FTP_BADCMD, "Illegal PORT command.");

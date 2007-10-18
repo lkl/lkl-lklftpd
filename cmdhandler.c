@@ -17,7 +17,6 @@
 //TODO: rename and move to apppropriate place
 #define VSFTP_DATA_BUFSIZE      65536
 
-const unsigned char * lkl_str_parse_uchar_string_sep(char *, char, unsigned char*, unsigned int);
 
 int handle_user_cmd(struct lfd_sess* sess)
 {
@@ -110,15 +109,15 @@ static char * resolve_tilde(const char * str, struct lfd_sess* sess, apr_pool_t 
 	return apr_pstrdup(allocator_pool, str);
 }
 
-static char * get_abs_path(struct lfd_sess *sess, apr_pool_t * allocator_pool)
+static char * get_abs_path(const char * original_path, struct lfd_sess *sess, apr_pool_t * allocator_pool)
 {
 	char * path;
 
-	if ( (NULL == sess->ftp_arg_str) || ('\0' == sess->ftp_arg_str[0]) )
+	if ( (NULL == original_path) || ('\0' == original_path[0]) )
 		return NULL;
 	
 	//this is only temp, so allocating from loop_pool is fine.
-	path = resolve_tilde(sess->ftp_arg_str, sess, sess->loop_pool);
+	path = resolve_tilde(original_path, sess, sess->loop_pool);
 	
 	if (NULL == path)
 		return NULL;
@@ -156,7 +155,7 @@ apr_status_t handle_dir_remove(struct lfd_sess *sess)
 	}
 	
 	// check to see if sess->ftp_arg_str is an absolute or relative path
-	rpath = get_abs_path(sess, sess->loop_pool);
+	rpath = get_abs_path(sess->ftp_arg_str, sess, sess->loop_pool);
 	if(NULL == rpath)
 	{
 		lfd_cmdio_write(sess, FTP_FILEFAIL, "The server has encountered an error.");
@@ -191,7 +190,7 @@ apr_status_t handle_dir_create(struct lfd_sess *sess)
 	}
 	
 	// check to see if sess->ftp_arg_str is an absolute or relative path
-	rpath = get_abs_path(sess, sess->loop_pool);
+	rpath = get_abs_path(sess->ftp_arg_str, sess, sess->loop_pool);
 	if(NULL == rpath)
 	{
 		lfd_cmdio_write(sess, FTP_FILEFAIL, "The server has encountered an error processing the path.");
@@ -246,7 +245,7 @@ apr_status_t handle_cwd(struct lfd_sess *sess)
 		return handle_cdup(sess);
 	}
 	
-	path = get_abs_path(sess, sess->loop_pool);
+	path = get_abs_path(sess->ftp_arg_str, sess, sess->loop_pool);
 	if(NULL == path)
 	{
 		lfd_cmdio_write(sess, FTP_FILEFAIL, "The server has encountered an error processing the path");
@@ -323,7 +322,7 @@ apr_status_t handle_rnfr(struct lfd_sess *sess, char ** temp_path)
 		rc = lfd_cmdio_write(sess, FTP_FILEFAIL, "Bad command argument.");
 		return rc;
 	}
-	path = get_abs_path(sess, sess->sess_pool);
+	path = get_abs_path(sess->ftp_arg_str, sess, sess->sess_pool);
 
 	if(NULL == path)
 	{
@@ -363,7 +362,7 @@ apr_status_t handle_rnto(struct lfd_sess *sess, char * old_path)
 	}
 
 	// obtain the new path and call lkl_file_rename
-	path = get_abs_path(sess, sess->loop_pool);
+	path = get_abs_path(sess->ftp_arg_str, sess, sess->loop_pool);
 
 	rc = lkl_file_rename(old_path, path, sess->loop_pool);
 
@@ -528,7 +527,7 @@ apr_status_t handle_retr(struct lfd_sess *sess)
 		return APR_EINVAL;
 	}
 	
-	path = get_abs_path(sess, sess->loop_pool);
+	path = get_abs_path(sess->ftp_arg_str, sess, sess->loop_pool);
 
 	rc = lkl_file_open(&file, path, APR_FOPEN_READ|APR_FOPEN_BINARY|APR_FOPEN_LARGEFILE|APR_FOPEN_SENDFILE_ENABLED, 0, sess->loop_pool);
 	if(APR_SUCCESS != rc)
@@ -601,7 +600,7 @@ apr_status_t handle_dele(struct lfd_sess * sess)
 		return rc;
 	}
 
-	path = get_abs_path(sess, sess->loop_pool);
+	path = get_abs_path(sess->ftp_arg_str, sess, sess->loop_pool);
 
 	if(NULL == path)
 	{
@@ -654,24 +653,24 @@ static char* get_unique_filename(char * base_str, apr_pool_t * pool)
 
 static struct lfd_transfer_ret do_file_recv(struct lfd_sess* sess, lkl_file_t * file_fd, int is_ascii)
 {
-	apr_off_t num_to_write;
-	struct lfd_transfer_ret ret_struct = { 0, 0 };
-	apr_off_t chunk_size = VSFTP_DATA_BUFSIZE;
-	int prev_cr = 0;
+	apr_off_t 		num_to_write;
+	struct lfd_transfer_ret	ret_struct = { 0, 0 };
+	apr_off_t		chunk_size = VSFTP_DATA_BUFSIZE;
+	int			prev_cr = 0;
 
 	/* Now that we do ASCII conversion properly, the plus one is to cater for
 		* the fact we may need to stick a '\r' at the front of the buffer if the
 		* last buffer fragment eneded in a '\r' and the current buffer fragment
 		* does not start with a '\n'.
 	*/
-	char * p_recvbuf = apr_palloc(sess->loop_pool, VSFTP_DATA_BUFSIZE + 1);
+	char			* p_recvbuf = apr_palloc(sess->loop_pool, VSFTP_DATA_BUFSIZE + 1);
 
 	while (1)
 	{
-		apr_status_t rc;
-		apr_size_t bytes_recvd = chunk_size;
-		apr_size_t bytes_written;
-		const char* p_writebuf = p_recvbuf + 1;
+		apr_status_t	  rc;
+		apr_size_t	  bytes_recvd = chunk_size;
+		apr_size_t	  bytes_written;
+		const char	* p_writebuf = p_recvbuf + 1;
 
 		rc = apr_socket_recv(sess->data_conn->data_sock, p_recvbuf + 1, &bytes_recvd);
 		if((APR_SUCCESS != rc) && (APR_EOF != rc))
@@ -735,7 +734,7 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 	{
 		return APR_EINVAL;
 	}
-	path = get_abs_path(sess, sess->loop_pool);
+	path = get_abs_path(sess->ftp_arg_str, sess, sess->loop_pool);
 
 	if (is_unique)
 	{
@@ -912,7 +911,7 @@ apr_status_t handle_list(struct lfd_sess *sess)
 	}
 	else
 	{
-		path = get_abs_path(sess, sess->loop_pool);
+		path = get_abs_path(sess->ftp_arg_str, sess, sess->loop_pool);
 	}
 	
 	if(NULL == path)
