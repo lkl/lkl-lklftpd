@@ -240,6 +240,10 @@ apr_status_t handle_cwd(struct lfd_sess *sess)
 		return rc;
 	}
 	
+	if (0 == strcmp(sess->ftp_arg_str, "."))
+	{
+		return lfd_cmdio_write(sess, FTP_CWDOK, "Directory changed to [%s].", sess->cwd_path);
+	}
 	if (0 == strcmp(sess->ftp_arg_str, ".."))
 	{
 		return handle_cdup(sess);
@@ -272,7 +276,7 @@ apr_status_t handle_cwd(struct lfd_sess *sess)
 	//allocate from a persistent pool
 	sess->cwd_path = apr_pstrdup(sess->sess_pool, path);
 	
-	return lfd_cmdio_write(sess, FTP_CWDOK, "Directory changed to %s.", sess->cwd_path);
+	return lfd_cmdio_write(sess, FTP_CWDOK, "Directory changed to [%s].", sess->cwd_path);
 }
 
 apr_status_t handle_cdup(struct lfd_sess *sess)
@@ -299,13 +303,13 @@ apr_status_t handle_cdup(struct lfd_sess *sess)
 	{
 		if ('/' == pos[0])
 		{
-			pos[1] = '\0';
 			break;
 		}
 		pos --;
 	}
-	
-	rc = lfd_cmdio_write(sess, FTP_ALLOOK, "Changed to directory %s.", sess->cwd_path);
+	pos[1] = '\0';
+
+	rc = lfd_cmdio_write(sess, FTP_ALLOOK, "Changed to directory [%s].", sess->cwd_path);
 	return rc;
 }
 
