@@ -1,5 +1,5 @@
-#ifndef LKLFTD__wrapper_sys_DECLARATIONS__H__
-#define LKLFTD__wrapper_sys_DECLARATIONS__H__
+#ifndef LKLFTD_SYSCALLS_H__
+#define LKLFTD_SYSCALLS_H__
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -8,7 +8,7 @@ struct pollfd;
 struct stat;
 struct linux_dirent;
 long wrapper_sys_sync(void);
-long wrapper_sys_mount(void *disk, char *fstype);
+long wrapper_sys_mount(void *disk, int devno, char *fstype);
 long wrapper_sys_reboot(int magic1, int magic2, unsigned int cmd,  void *arg);
 ssize_t wrapper_sys_write(unsigned int fd, const char *buf,    size_t count);
 long wrapper_sys_close(unsigned int fd);
@@ -28,7 +28,4 @@ long wrapper_sys_getdents(unsigned int fd, struct linux_dirent *dirent, unsigned
 long wrapper_sys_newstat(char *filename, struct stat *statbuf);
 long wrapper_sys_utimes(const char *filename, struct timeval *utimes);
 
-void barrier_init(void);
-void barrier_fini(void);
-
-#endif //LKLFTD__wrapper_sys_DECLARATIONS__H__
+#endif 

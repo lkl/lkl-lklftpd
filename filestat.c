@@ -6,7 +6,7 @@
 #include <asm/stat.h>
 
 #include "fileops.h"
-#include "sys_declarations.h"
+#include "syscalls.h"
 
 
 apr_fileperms_t lkl_unix_mode2perms(mode_t mode)

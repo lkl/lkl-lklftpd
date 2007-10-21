@@ -1,7 +1,7 @@
 #ifdef LKL_FILE_APIS
 
 #include "fileops.h"
-#include "sys_declarations.h"
+#include "syscalls.h"
 
 #define BUF_SIZE 4096
 

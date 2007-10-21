@@ -5,7 +5,7 @@
 #include <apr_thread_proc.h>
 #include <apr_poll.h>
 
-#include "sys_declarations.h"
+#include "syscalls.h"
 #include "listen.h"
 #include "config.h"
 #include "utils.h"

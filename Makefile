@@ -13,9 +13,8 @@ HERE=$(PWD)
 LINUX=$(HERE)/../linux-2.6
 
 OBJS=listen.o main.o worker.o utils.o config.o cmdio.o cmdhandler.o	\
-	 sess.o fileops.o filestat.o dirops.o sys_declarations.o	\
-	 connection.o							\
-	barrier.o lklops.o disk.o 
+	 sess.o fileops.o filestat.o dirops.o syscalls.o		\
+	 syscall_helpers.o connection.o lklops.o disk.o
 
 
 all: daemon.out 
@@ -56,10 +55,10 @@ lkl-nt/vmlinux: lkl-nt/.config
 		vmlinux
 
 CFLAGS=-Wall -g -DFILE_DISK_MAJOR=42 -D_LARGEFILE64_SOURCE $(LKL_DEFINES)	\
-	$(APR_LIN_INCLUDE) -Werror
+	$(APR_LIN_INCLUDE) 
 
 
-sys_declarations.o: sys_declarations.c $(INC)
+syscalls.o: syscalls.c $(INC)
 	$(CC) -c $(CFLAGS) -Iinclude $< 
 
 
@@ -71,7 +70,7 @@ AOUT=$(OBJS) lkl/vmlinux
 AEXE=$(OBJS) lkl-nt/vmlinux
 
 clean:
-	-rm -rf daemon-aio.out daemon.out daemon.exe lkl lkl-nt lkl-aio include *.o drivers/*.o drivers/built-in* drivers/.*.cmd
+	-rm -rf daemon-aio.out daemon.out daemon.exe lkl lkl-nt include *.o drivers/*.o drivers/built-in* drivers/.*.cmd
 
 TAGS: 
 	etags *.c drivers/*.c
