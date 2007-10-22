@@ -16,24 +16,25 @@ OBJS=listen.o main.o worker.o utils.o config.o cmdio.o cmdhandler.o	\
 	 sess.o fileops.o filestat.o dirops.o syscalls.o		\
 	 syscall_helpers.o connection.o lklops.o disk.o
 
+MKDIR=mkdir -p
 
 all: daemon.out 
 
 
 include/asm:
-	-mkdir `dirname $@`
+	-$(MKDIR) `dirname $@`
 	ln -s $(LINUX)/include/asm-lkl include/asm
 
 include/asm-i386:
-	-mkdir `dirname $@`
+	-$(MKDIR) `dirname $@`
 	ln -s $(LINUX)/include/asm-i386 include/asm-i386
 
 include/asm-generic:
-	-mkdir `dirname $@`
+	-$(MKDIR) `dirname $@`
 	ln -s $(LINUX)/include/asm-generic include/asm-generic
 
 include/linux:
-	-mkdir `dirname $@`
+	-$(MKDIR) `dirname $@`
 	ln -s $(LINUX)/include/linux include/linux
 
 %.config: $(LINUX)/arch/lkl/defconfig
