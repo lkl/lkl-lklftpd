@@ -2,11 +2,11 @@
 #include <linux/kernel.h>
 #include <linux/console.h>
 
-extern int printf(const char *, ...);
+extern int write(int, const char*, unsigned);
 
 static void console_write(struct console *con, const char *str, unsigned len)
 {
-	printf("%s", str);
+	write(1, str, len);
 }
 
 static struct console console = {
