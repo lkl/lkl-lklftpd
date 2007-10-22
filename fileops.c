@@ -1,7 +1,7 @@
 //here we implement the lkl-based file wrappers.
 #ifdef LKL_FILE_APIS
 
-#include "sys_declarations.h"
+#include "syscalls.h"
 #include "fileops.h"
 #include <linux/poll.h>
 

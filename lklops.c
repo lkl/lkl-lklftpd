@@ -188,14 +188,35 @@ static struct linux_native_operations lnops = {
 	.timer = linux_timer
 };
 
+static apr_thread_t *init;
+static apr_thread_mutex_t *wait_init;
+
+void* APR_THREAD_FUNC init_thread(apr_thread_t *thr, void *arg)
+{
+	linux_start_kernel(&lnops, "");
+	return NULL;
+}
+
+static void (*real_main)(void);
+
+void fake_main(void)
+{
+	apr_thread_mutex_unlock(wait_init);
+	real_main();
+}
+
 void lkl_init(void (*main)(void))
 {
-	lnops.main=main;
+	real_main=main;
+	lnops.main=fake_main;
 
 	apr_pool_create(&pool, NULL);
 
 	apr_thread_mutex_create(&kth_mutex, APR_THREAD_MUTEX_UNNESTED, pool);
         apr_thread_mutex_lock(kth_mutex);
+
+	apr_thread_mutex_create(&wait_init, APR_THREAD_MUTEX_UNNESTED, pool);
+	apr_thread_mutex_lock(wait_init);
 
 	apr_pollset_create(&pollset, 1, pool, 0);
 	apr_file_pipe_create(&events_pipe_in, &events_pipe_out, pool);
@@ -209,6 +230,17 @@ void lkl_init(void (*main)(void))
 	};
 	apr_pollset_add(pollset, &apfd);
 
-	linux_start_kernel(&lnops, "");
+	apr_thread_create(&init, NULL, init_thread, NULL, pool);
+
+	apr_thread_mutex_lock(wait_init);
 }
 
+void lkl_fini(void)
+{
+	apr_status_t ret;
+	struct syscall_req sr = { .syscall = -1 };
+	
+	linux_trigger_irq_with_data(SYSCALL_IRQ, &sr);
+	
+	apr_thread_join(&ret, init);
+}

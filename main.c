@@ -11,11 +11,14 @@
 #include <apr_getopt.h>
 #include <apr_file_io.h>
 
-#include "sys_declarations.h"
+#include "include/asm/callbacks.h"
+#include "syscalls.h"
+#include "syscall_helpers.h"
 #include "utils.h"
 #include "config.h"
 #include "listen.h"
 #include "lklops.h"
+#include "drivers/disk.h"
 
 volatile apr_uint32_t ftp_must_exit;
 
@@ -36,36 +39,29 @@ apr_pool_t	* root_pool;
 static const char *disk_image="disk";
 static const char *fs_type;
 static int ro=0;
+static dev_t devno;
+static apr_file_t *disk_file;
 
 #ifdef LKL_FILE_APIS
 void lkl_main(void)
 {
-	apr_file_t *disk_file;
-	apr_status_t status;
-	
-	if ((status=apr_file_open(&disk_file, disk_image, APR_FOPEN_READ|(ro?0:APR_FOPEN_WRITE)|APR_FOPEN_BINARY,
+	apr_status_t rc;
+
+	if ((rc=apr_file_open(&disk_file, disk_image, APR_FOPEN_READ|(ro?0:APR_FOPEN_WRITE)|APR_FOPEN_BINARY,
 				  APR_OS_DEFAULT, root_pool)) != APR_SUCCESS) {
-		lfd_log(LFD_ERROR, "failed to open disk image '%s': %s", disk_image, lfd_apr_strerror_thunsafe(status));
+		lfd_log(LFD_ERROR, "failed to open disk image '%s': %s", disk_image, lfd_apr_strerror_thunsafe(rc));
 		return;
 	}
 
-	if ((status=wrapper_sys_mkdir("/mnt", 0700))) {
-		lfd_log(LFD_ERROR, "failed to mkdir /mnt: %d", status);
+	if (lkl_disk_add_disk(disk_file, &devno)) 
 		return;
-	}
 
-	if ((status=wrapper_sys_mount((void*)disk_file, NULL)) < 0) {
-		//FIXME: add string error code; note that the error code is not
-		//compatible with apr (unless you are running on linux/i386); we
-		//most likely need error codes strings in lkl itself; need to
-		//fix other cases as well
-		lfd_log(LFD_ERROR, "failed to mount disk: %d", status);
-		return;
+	while (1) {
+		struct syscall_req *sr=linux_wait_syscall_request();
+		if (sr->syscall == -1)
+			return;
+		linux_syscall(sr);
 	}
-
-	printf("Ftp server preparing to accept client connections.\n");
-	lfd_listen(root_pool);
-	printf("Ftp server is not running any more. Client connections will be obliterated.\n");
 }
 #endif
 
@@ -171,20 +167,38 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	apr_signal(SIGTERM, sig_func);
 #ifdef SIGKILL
 	apr_signal(SIGKILL, sig_func);
-#endif//SIGKILL
+#endif
 #ifdef SIGHUP
 	apr_signal(SIGHUP,  sig_func);
-#endif//SIGHUP
+#endif
 	apr_signal(SIGINT,  sig_func);
 
-	barrier_init();
+	syscall_helpers_init();
 
-#ifndef LKL_FILE_APIS
-	lfd_listen(root_pool);
-#else //LKL_FILE_APIS
+#ifdef LKL_FILE_APIS
 	lkl_init(lkl_main);
-#endif //LKL_FILE_APIS
 
-	barrier_fini();
+	if ((rc=wrapper_sys_mkdir("/mnt", 0700))) {
+		lfd_log(LFD_ERROR, "failed to mkdir /mnt: %d", rc);
+		return -1;
+	}
+
+	if ((rc=wrapper_sys_mount(disk_file, devno, NULL)) < 0) {
+		//FIXME: add string error code; note that the error code is not
+		//compatible with apr (unless you are running on linux/i386); we
+		//most likely need error codes strings in lkl itself; need to
+		//fix other cases as well
+		lfd_log(LFD_ERROR, "failed to mount disk: %d", rc);
+		return -1;
+	}
+#endif 
+
+	printf("Ftp server preparing to accept client connections.\n");
+	lfd_listen(root_pool);
+	printf("Ftp server is not running any more. Client connections will be obliterated.\n");
+
+	lkl_fini();
+
+	syscall_helpers_fini();
 	return 0;
 }
