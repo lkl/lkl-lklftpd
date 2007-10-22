@@ -29,12 +29,9 @@ static void lkl_disk_request(request_queue_t *q)
 			continue;
 		}
 
-		blkdev_dequeue_request(req);
-
 		status=lkl_disk_do_rw(dev->file, req->sector, req->current_nr_sectors,
 			       req->buffer, rq_data_dir(req));
-		end_that_request_first(req, status, req->hard_cur_sectors);
-		end_that_request_last(req, status);
+		end_request(req, status);
 	}
 }
 
