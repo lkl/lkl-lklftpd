@@ -70,7 +70,9 @@ AOUT=$(OBJS) lkl/vmlinux
 AEXE=$(OBJS) lkl-nt/vmlinux
 
 clean:
-	-rm -rf daemon-aio.out daemon.out daemon.exe lkl lkl-nt include *.o drivers/*.o drivers/built-in* drivers/.*.cmd
+	-rm -rf daemon-aio.out daemon.out daemon.exe include *.o drivers/*.o drivers/built-in* drivers/.*.cmd
+clean-all: clean
+	-rm -rf lkl lkl-nt
 
 TAGS: 
 	etags *.c drivers/*.c
