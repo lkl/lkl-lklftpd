@@ -12,14 +12,13 @@ APR_WIN_LIB=apr_win/Debug/libapr-1.lib
 HERE=$(PWD)
 LINUX=$(HERE)/../linux-2.6
 
-OBJS=listen.o main.o worker.o utils.o config.o cmdio.o cmdhandler.o	\
-	 sess.o fileops.o filestat.o dirops.o syscalls.o		\
-	 syscall_helpers.o connection.o lklops.o disk.o
+SRCS=$(shell ls *.c)
+OBJS=$(patsubst %.c,%.o,$(SRCS))
+DEPS=$(patsubst %.c,.deps/%.d,$(SRCS))
 
 MKDIR=mkdir -p
 
 all: daemon.out 
-
 
 include/asm:
 	-$(MKDIR) `dirname $@`
@@ -71,7 +70,8 @@ AOUT=$(OBJS) lkl/vmlinux
 AEXE=$(OBJS) lkl-nt/vmlinux
 
 clean:
-	-rm -rf daemon-aio.out daemon.out daemon.exe include *.o drivers/*.o drivers/built-in* drivers/.*.cmd
+	-rm -rf daemon.out daemon.exe include *.o drivers/*.o drivers/built-in* drivers/.*.cmd
+
 clean-all: clean
 	-rm -rf lkl lkl-nt
 
@@ -84,4 +84,12 @@ daemon.out: $(AOUT) $(INC) include/asm
 daemon.exe: $(AEXE) $(INC)
 	i586-mingw32msvc-gcc $(CFLAGS) $(APR_WIN_INCLUDE) $(AEXE) $(APR_WIN_LIB) -o $@
 
-.force:
+.deps/%.d: %.c
+	mkdir -p .deps/$(dir $<)
+	$(CC) $(CFLAGS) -MM -MT $(patsubst %.c,%.o,$<) $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+	rm -f $@.$$$$
+
+include $(DEPS)
+
+

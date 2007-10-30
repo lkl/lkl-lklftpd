@@ -3,10 +3,10 @@
 lkl
 daemon
 disk
-.depends
 TAGS
 *.cmd
 built-in*
 daemon.out
 daemon.exe
 include/*
+.deps
