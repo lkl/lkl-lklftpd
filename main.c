@@ -41,27 +41,32 @@ static const char *fs_type;
 static int ro=0;
 static dev_t devno;
 static apr_file_t *disk_file;
+static int init_err;
 
 #ifdef LKL_FILE_APIS
-void lkl_main(void)
+
+apr_thread_mutex_t *wait_init;
+
+int lkl_init_2(void)
 {
 	apr_status_t rc;
 
 	if ((rc=apr_file_open(&disk_file, disk_image, APR_FOPEN_READ|(ro?0:APR_FOPEN_WRITE)|APR_FOPEN_BINARY,
 				  APR_OS_DEFAULT, root_pool)) != APR_SUCCESS) {
 		lfd_log(LFD_ERROR, "failed to open disk image '%s': %s", disk_image, lfd_apr_strerror_thunsafe(rc));
-		return;
+		init_err=-1;
+		goto out;
 	}
 
-	if (lkl_disk_add_disk(disk_file, &devno)) 
-		return;
-
-	while (1) {
-		struct syscall_req *sr=linux_wait_syscall_request();
-		if (sr->syscall == -1)
-			return;
-		linux_syscall(sr);
+	if (lkl_disk_add_disk(disk_file, &devno)) {
+		init_err=-1;
+		goto out;
 	}
+		
+out:
+	apr_thread_mutex_unlock(wait_init);
+
+	return init_err;
 }
 #endif
 
@@ -176,19 +181,29 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	syscall_helpers_init();
 
 #ifdef LKL_FILE_APIS
-	lkl_init(lkl_main);
+	apr_thread_mutex_create(&wait_init, APR_THREAD_MUTEX_UNNESTED, root_pool);
+	apr_thread_mutex_lock(wait_init);
+	lkl_init(lkl_init_2);
+	apr_thread_mutex_lock(wait_init);
+
+	if (init_err != 0) {
+	    lkl_fini();
+	    return -1;
+	}
 
 	if ((rc=wrapper_sys_mkdir("/mnt", 0700))) {
 		lfd_log(LFD_ERROR, "failed to mkdir /mnt: %d", rc);
+		lkl_fini();
 		return -1;
 	}
 
-	if ((rc=wrapper_sys_mount(disk_file, devno, NULL)) < 0) {
+	if ((rc=wrapper_sys_mount(disk_file, devno, NULL, ro)) < 0) {
 		//FIXME: add string error code; note that the error code is not
 		//compatible with apr (unless you are running on linux/i386); we
 		//most likely need error codes strings in lkl itself; need to
 		//fix other cases as well
 		lfd_log(LFD_ERROR, "failed to mount disk: %d", rc);
+		lkl_fini();
 		return -1;
 	}
 #endif 
@@ -197,7 +212,9 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	lfd_listen(root_pool);
 	printf("Ftp server is not running any more. Client connections will be obliterated.\n");
 
+#ifdef LKL_FILE_APIS
 	lkl_fini();
+#endif
 
 	syscall_helpers_fini();
 	return 0;

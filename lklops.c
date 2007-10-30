@@ -165,7 +165,7 @@ static void *_phys_mem;
 
 void linux_mem_init(unsigned long *phys_mem, unsigned long *phys_mem_size)
 {
-	*phys_mem_size=256*1024*1024;
+	*phys_mem_size=16*1024*1024;
 	*phys_mem=(unsigned long)malloc(*phys_mem_size);
 }
 
@@ -197,26 +197,16 @@ void* APR_THREAD_FUNC init_thread(apr_thread_t *thr, void *arg)
 	return NULL;
 }
 
-static void (*real_main)(void);
+static int (*real_init_2)(void);
 
-void fake_main(void)
+void lkl_init(int (*init_2)(void))
 {
-	apr_thread_mutex_unlock(wait_init);
-	real_main();
-}
-
-void lkl_init(void (*main)(void))
-{
-	real_main=main;
-	lnops.main=fake_main;
+	lnops.init=init_2;
 
 	apr_pool_create(&pool, NULL);
 
 	apr_thread_mutex_create(&kth_mutex, APR_THREAD_MUTEX_UNNESTED, pool);
         apr_thread_mutex_lock(kth_mutex);
-
-	apr_thread_mutex_create(&wait_init, APR_THREAD_MUTEX_UNNESTED, pool);
-	apr_thread_mutex_lock(wait_init);
 
 	apr_pollset_create(&pollset, 1, pool, 0);
 	apr_file_pipe_create(&events_pipe_in, &events_pipe_out, pool);
@@ -231,16 +221,15 @@ void lkl_init(void (*main)(void))
 	apr_pollset_add(pollset, &apfd);
 
 	apr_thread_create(&init, NULL, init_thread, NULL, pool);
-
-	apr_thread_mutex_lock(wait_init);
 }
+
+extern long wrapper_sys_halt();
 
 void lkl_fini(void)
 {
 	apr_status_t ret;
-	struct syscall_req sr = { .syscall = -1 };
-	
-	linux_trigger_irq_with_data(SYSCALL_IRQ, &sr);
+
+	wrapper_sys_halt();
 	
 	apr_thread_join(&ret, init);
 }
