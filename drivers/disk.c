@@ -55,6 +55,7 @@ static int which=0;
 int lkl_disk_add_disk(void *file, dev_t *devno)
 {
 	struct lkl_disk_dev *dev=kmalloc(sizeof(*dev), GFP_KERNEL);
+	unsigned long sectors;
 
 	BUG_ON(dev == NULL);
 
@@ -80,7 +81,9 @@ int lkl_disk_add_disk(void *file, dev_t *devno)
 	dev->gd->queue = dev->queue;
 	dev->gd->private_data = dev;
 	snprintf (dev->gd->disk_name, 32, "lkl_disk_%d", dev->gd->first_minor);
-	set_capacity(dev->gd, lkl_disk_get_sectors(dev->file));
+	if (!(sectors=lkl_disk_get_sectors(dev->file)))
+		return -1;
+	set_capacity(dev->gd, sectors);
 
 	add_disk(dev->gd);
 
