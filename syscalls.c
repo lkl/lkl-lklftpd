@@ -41,6 +41,11 @@ long wrapper_sys_halt(void)
 	return 0;
 }
 
+long wrapper_sys_umount(const char *path, int flags)
+{
+	SYSCALL_REQ(umount, (long)path, flags);
+}
+
 ssize_t wrapper_sys_write(unsigned int fd, const char *buf, size_t count)
 {
 	SYSCALL_REQ(write, fd, (long)buf, count);

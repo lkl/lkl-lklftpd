@@ -27,5 +27,6 @@ long wrapper_sys_rmdir(const char *pathname);
 long wrapper_sys_getdents(unsigned int fd, struct linux_dirent *dirent, unsigned int count);
 long wrapper_sys_newstat(char *filename, struct stat *statbuf);
 long wrapper_sys_utimes(const char *filename, struct timeval *utimes);
+long wraper_sys_umount(const char *path, int flags);
 
 #endif 

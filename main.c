@@ -214,8 +214,11 @@ int main(int argc, char const *const * argv, char const *const * engv)
 
 #ifdef LKL_FILE_APIS
 	lkl_fini();
+	apr_file_close(disk_file);
 #endif
 
 	syscall_helpers_fini();
 	return 0;
 }
+
+int *stupidGdb;

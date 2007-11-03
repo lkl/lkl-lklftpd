@@ -189,15 +189,12 @@ static struct linux_native_operations lnops = {
 };
 
 static apr_thread_t *init;
-static apr_thread_mutex_t *wait_init;
 
 void* APR_THREAD_FUNC init_thread(apr_thread_t *thr, void *arg)
 {
 	linux_start_kernel(&lnops, "");
 	return NULL;
 }
-
-static int (*real_init_2)(void);
 
 void lkl_init(int (*init_2)(void))
 {
@@ -224,11 +221,14 @@ void lkl_init(int (*init_2)(void))
 }
 
 extern long wrapper_sys_halt();
+extern long wrapper_sys_sync();
+extern long wrapper_sys_umount(const char*, int);
 
 void lkl_fini(void)
 {
 	apr_status_t ret;
 
+	wrapper_sys_umount("/", 0);
 	wrapper_sys_halt();
 	
 	apr_thread_join(&ret, init);
