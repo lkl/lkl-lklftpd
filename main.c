@@ -187,13 +187,13 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	apr_thread_mutex_lock(wait_init);
 
 	if (init_err != 0) {
-	    lkl_fini();
+	    lkl_fini(LKL_FINI_DONT_UMOUNT_ROOT);
 	    return -1;
 	}
 
 	if ((rc=wrapper_sys_mkdir("/mnt", 0700))) {
 		lfd_log(LFD_ERROR, "failed to mkdir /mnt: %d", rc);
-		lkl_fini();
+		lkl_fini(LKL_FINI_DONT_UMOUNT_ROOT);
 		return -1;
 	}
 
@@ -203,7 +203,7 @@ int main(int argc, char const *const * argv, char const *const * engv)
 		//most likely need error codes strings in lkl itself; need to
 		//fix other cases as well
 		lfd_log(LFD_ERROR, "failed to mount disk: %d", rc);
-		lkl_fini();
+		lkl_fini(LKL_FINI_DONT_UMOUNT_ROOT);
 		return -1;
 	}
 #endif 
@@ -213,7 +213,7 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	printf("Ftp server is not running any more. Client connections will be obliterated.\n");
 
 #ifdef LKL_FILE_APIS
-	lkl_fini();
+	lkl_fini(0);
 	apr_file_close(disk_file);
 #endif
 

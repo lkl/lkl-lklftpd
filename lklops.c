@@ -11,6 +11,7 @@
 #include <assert.h>
 
 #include "include/asm/callbacks.h"
+#include "lklops.h"
 
 static apr_pool_t *pool;
 
@@ -224,11 +225,13 @@ extern long wrapper_sys_halt();
 extern long wrapper_sys_sync();
 extern long wrapper_sys_umount(const char*, int);
 
-void lkl_fini(void)
+
+void lkl_fini(unsigned int flag)
 {
 	apr_status_t ret;
-
-	wrapper_sys_umount("/", 0);
+	
+	if(0 == (flag & LKL_FINI_DONT_UMOUNT_ROOT))
+		wrapper_sys_umount("/", 0);
 	wrapper_sys_halt();
 	
 	apr_thread_join(&ret, init);
