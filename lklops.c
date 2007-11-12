@@ -1,4 +1,5 @@
 #include <apr.h>
+#include <apr_atomic.h>
 #include <apr_pools.h>
 #include <apr_thread_proc.h>
 #include <apr_thread_mutex.h>
@@ -13,6 +14,9 @@
 #include "include/asm/callbacks.h"
 #include "lklops.h"
 
+static volatile apr_uint32_t number_of_threads = -1;
+static volatile int shutting_down = 0;
+apr_thread_mutex_t * all_threads_are_gone_mutex;
 static apr_pool_t *pool;
 
 struct _thread_info {
@@ -33,13 +37,14 @@ void* linux_thread_info_alloc(void)
 {
         struct _thread_info *pti=malloc(sizeof(*pti));
 
-	assert(pti != NULL);
+        assert(pti != NULL);
 
         apr_thread_mutex_create(&pti->sched_mutex, APR_THREAD_MUTEX_UNNESTED, pool);
         apr_thread_mutex_lock(pti->sched_mutex);
-	pti->dead=0;
+        pti->dead=0;
+        apr_atomic_inc32(&number_of_threads);
 
-	return pti;
+        return pti;
 }
 
 void linux_context_switch(void *prev, void *next)
@@ -75,9 +80,13 @@ void* APR_THREAD_FUNC kernel_thread_helper(apr_thread_t *thr, void *arg)
 void linux_free_thread(void *arg)
 {
         struct _thread_info *pti=(struct _thread_info*)arg;
+	int threads_still_exist;
+        pti->dead=1;
 
-	pti->dead=1;
+	threads_still_exist = apr_atomic_dec32(&number_of_threads);
         apr_thread_mutex_unlock(pti->sched_mutex);
+	if(!threads_still_exist && shutting_down)
+		apr_thread_mutex_unlock(all_threads_are_gone_mutex);
 }
 
 int linux_new_thread(int (*fn)(void*), void *arg, void *pti)
@@ -174,7 +183,6 @@ void linux_halt(void)
 {
 	free(_phys_mem);
 }
-
 static struct linux_native_operations lnops = {
 	.panic_blink = linux_panic_blink,
 	.mem_init = linux_mem_init,
@@ -189,7 +197,7 @@ static struct linux_native_operations lnops = {
 	.timer = linux_timer
 };
 
-static apr_thread_t *init;
+
 
 void* APR_THREAD_FUNC init_thread(apr_thread_t *thr, void *arg)
 {
@@ -199,9 +207,13 @@ void* APR_THREAD_FUNC init_thread(apr_thread_t *thr, void *arg)
 
 void lkl_init(int (*init_2)(void))
 {
+	apr_thread_t *init;
 	lnops.init=init_2;
 
 	apr_pool_create(&pool, NULL);
+
+	apr_thread_mutex_create(&all_threads_are_gone_mutex, APR_THREAD_MUTEX_UNNESTED, pool);
+	apr_thread_mutex_lock(all_threads_are_gone_mutex);
 
 	apr_thread_mutex_create(&kth_mutex, APR_THREAD_MUTEX_UNNESTED, pool);
         apr_thread_mutex_lock(kth_mutex);
@@ -228,11 +240,16 @@ extern long wrapper_sys_umount(const char*, int);
 
 void lkl_fini(unsigned int flag)
 {
-	apr_status_t ret;
-	
+	apr_uint32_t nr_threads; 
+	shutting_down = 1;
 	if(0 == (flag & LKL_FINI_DONT_UMOUNT_ROOT))
 		wrapper_sys_umount("/", 0);
 	wrapper_sys_halt();
-	
-	apr_thread_join(&ret, init);
+	nr_threads = apr_atomic_read32(&number_of_threads);
+	if(-1 != nr_threads)
+	{
+		apr_thread_mutex_lock(all_threads_are_gone_mutex);
+		apr_thread_mutex_unlock(all_threads_are_gone_mutex);
+		apr_thread_mutex_destroy(all_threads_are_gone_mutex);
+	}
 }
