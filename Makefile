@@ -6,7 +6,7 @@ LKL=lkl/vmlinux
 APR_LIN_INCLUDE=-I/usr/include/apr-1.0/
 APR_WIN_INCLUDE=-Iapr_win/include/
 
-APR_LIN_LIB=-L/usr/lib/debug/usr/lib/libapr-1.so.0.2.7 -lapr-1
+APR_LIN_LIB=-lapr-1 -L/home/gringo/apr12x/.libs/libapr-1.so.0.2.12
 APR_WIN_LIB=apr_win/Debug/libapr-1.lib
 
 
@@ -71,7 +71,7 @@ AOUT=$(OBJS) lkl/vmlinux
 AEXE=$(OBJS) lkl-nt/vmlinux
 
 clean:
-	-rm -rf daemon.out daemon.exe include *.o drivers/*.o drivers/built-in* drivers/.*.cmd .deps/
+	-rm -rf daemon.out daemon.exe include *.o drivers/*.o drivers/built-in* drivers/.*.cmd .deps/ *~
 
 clean-all: clean
 	-rm -rf lkl lkl-nt
