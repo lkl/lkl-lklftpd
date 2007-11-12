@@ -1,4 +1,5 @@
 #uncoment the next 2 lines to get LKL's file APIs. This currently works on linux only
+.PHONY=clean
 LKL_DEFINES+=-DLKL_FILE_APIS
 LKL=lkl/vmlinux
 
@@ -70,7 +71,7 @@ AOUT=$(OBJS) lkl/vmlinux
 AEXE=$(OBJS) lkl-nt/vmlinux
 
 clean:
-	-rm -rf daemon.out daemon.exe include *.o drivers/*.o drivers/built-in* drivers/.*.cmd
+	-rm -rf daemon.out daemon.exe include *.o drivers/*.o drivers/built-in* drivers/.*.cmd .deps/
 
 clean-all: clean
 	-rm -rf lkl lkl-nt
