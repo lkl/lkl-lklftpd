@@ -178,7 +178,7 @@ int main(int argc, char const *const * argv, char const *const * engv)
 #endif
 	apr_signal(SIGINT,  sig_func);
 #ifdef SIGPIPE
-    signal(SIGPIPE, SIG_IGN);
+	apr_signal(SIGPIPE, SIG_IGN);
 #endif
 	syscall_helpers_init();
 
