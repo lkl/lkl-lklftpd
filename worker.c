@@ -14,6 +14,7 @@
 #include "cmdhandler.h"
 #include "sess.h"
 #include "connection.h"
+#include "thread_wrapper.h"
 
 extern volatile apr_uint32_t ftp_must_exit;
 static apr_status_t emit_greeting(struct lfd_sess * sess)
@@ -213,6 +214,10 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		{
 			rc = handle_list(sess);
 		}
+		else if(lfd_cmdio_cmd_equals(sess, "FEAT"))
+		{
+			rc = handle_feat(sess);
+		}
 		else if(lfd_cmdio_cmd_equals(sess, "APPE"))
 		{
 			rc = handle_appe(sess);
@@ -248,7 +253,7 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 	return rc;
 }
 
-void * APR_THREAD_FUNC lfd_worker_protocol_main(apr_thread_t * thd, void* param)
+static void * APR_THREAD_FUNC lfd_worker_protocol_main_impl(apr_thread_t * thd, void* param)
 {
 	apr_status_t	rc;
 	apr_socket_t 	* sock = (apr_socket_t*) param;
@@ -289,4 +294,11 @@ void * APR_THREAD_FUNC lfd_worker_protocol_main(apr_thread_t * thd, void* param)
 
 	lfd_sess_destroy(sess);
 	return NULL;
+}
+
+void * APR_THREAD_FUNC lfd_worker_protocol_main(apr_thread_t * thd, void* param)
+{
+	void * APR_THREAD_FUNC ret = lfd_worker_protocol_main_impl(thd, param);
+	wrapper_apr_thread_exit(thd, 0);
+	return ret;
 }

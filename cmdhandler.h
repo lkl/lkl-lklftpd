@@ -18,7 +18,7 @@ apr_status_t handle_abort(struct lfd_sess* sess);
 apr_status_t handle_syst(struct lfd_sess * sess);
 apr_status_t handle_type(struct lfd_sess *psess);
 apr_status_t handle_site(struct lfd_sess* sess);
-
+apr_status_t handle_feat(struct lfd_sess* sess);
 
 // file transfer/status commands
 apr_status_t handle_retr(struct lfd_sess *sess);

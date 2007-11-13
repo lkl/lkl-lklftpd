@@ -10,6 +10,7 @@
 #include "config.h"
 #include "utils.h"
 #include "worker.h"
+#include "thread_wrapper.h"
 
 extern volatile apr_uint32_t ftp_must_exit;
 static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
@@ -152,7 +153,7 @@ void lfd_listen(apr_pool_t * mp)
 			//###: is this a proper place to issue an "flush buffers to disk"?
 			wrapper_sys_sync();
 		#endif
-		rc = apr_thread_create(&thd, thattr, &lfd_worker_protocol_main, (void*)client_sock, thd_pool);
+		rc = wrapper_apr_thread_create(&thd, thattr, &lfd_worker_protocol_main, (void*)client_sock, thd_pool);
 		if(APR_SUCCESS != rc)
 		{
 			lfd_log(LFD_ERROR, "apr_thread_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));

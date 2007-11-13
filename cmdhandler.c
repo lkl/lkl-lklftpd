@@ -67,7 +67,8 @@ apr_status_t handle_quit(struct lfd_sess * sess)
 apr_status_t handle_abort(struct lfd_sess* sess)
 {
 	// stop the active data transfer and close the data connection
-	if(0 == sess->data_conn->in_progress)
+	
+	if(NULL == sess->data_conn || 0 == sess->data_conn->in_progress)
 	{
 		lfd_cmdio_write(sess, FTP_ABOR_NOCONN, "Nothing to abort.");
 		return APR_SUCCESS;
@@ -223,6 +224,8 @@ apr_status_t handle_pwd(struct lfd_sess *sess)
 	apr_status_t rc;
 
 	rc = lfd_cmdio_write(sess, FTP_PWDOK, sess->cwd_path);
+	if(APR_SUCCESS != rc)
+		lfd_log(LFD_ERROR, "handle_pwd:lfd_cmdio_write failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
 	return rc;
 }
 
@@ -974,6 +977,22 @@ apr_status_t handle_site(struct lfd_sess* sess)
 		rc = lfd_cmdio_write(sess, FTP_BADCMD, "Unknown SITE command.");
 	}
 	return rc;
+}
+apr_status_t handle_feat(struct lfd_sess* sess)
+{
+	//TODO: add error handling
+	lfd_cmdio_write(sess, FTP_FEAT, "Features:" 
+/*" EPRT\r\n"
+" EPSV\r\n"
+" MDTM\r\n"
+
+" REST STREAM\r\n"
+" SIZE\r\n"
+" TVFS\r\n"
+" PASV\r\n"*/
+);
+	lfd_cmdio_write(sess, FTP_FEAT, "End");
+	return APR_SUCCESS;
 }
 /*
 

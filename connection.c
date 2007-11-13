@@ -144,37 +144,46 @@ apr_status_t handle_pasv(struct lfd_sess * sess)
 	apr_port_t	port;
 	unsigned char	vals[6];
 	char		*addr;
-
-	lfd_communication_cleanup(sess);
 	
+	lfd_communication_cleanup(sess);
+
 	rc = bind_to_random_passive_port(sess, &saddr, &port);
 	if(APR_SUCCESS != rc)
 	{
+		lfd_log(LFD_ERROR, "handle_pasv: bind_to_random_passive_port failed with [%d] and message[%s]", rc, lfd_sess_strerror(sess, rc));
 		return rc;
 	}
-	
+
 	rc = apr_socket_listen(sess->pasv_listen_fd, 1); //backlog of one!
 	if(APR_SUCCESS != rc)
 	{
+		lfd_log(LFD_ERROR, "handle_pasv: apr_socket_listen failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
 		return rc;
 	}
-	
+
 	//get the IP represented as a string of characters
 	rc = apr_sockaddr_ip_get(&addr, saddr);
 	if(APR_SUCCESS != rc)
 	{
+		lfd_log(LFD_ERROR, "handle_pasv: apr_sockaddr_ip_get failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
 		return rc;
 	}
-	
+
 	// fill the first 4 elemnts of vals with the numbers from the IP address
 	lfd_str_parse_uchar_string_sep(addr, '.', vals, 4);
 	
 	// append the decomposed port number
 	vals[4] = (unsigned char) (port >> 8);
 	vals[5] = (unsigned char) (port & 0xFF);
-	
-	rc = lfd_cmdio_write(sess, FTP_PASVOK,"Entering Passive Mode. %d,%d,%d,%d,%d,%d", vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]);
-	return APR_SUCCESS;
+
+	rc = lfd_cmdio_write(sess, FTP_PASVOK, "Entering Passive Mode. %d,%d,%d,%d,%d,%d\n", 
+				(int)vals[0], (int)vals[1], (int)vals[2], 
+				(int)vals[3], (int)vals[4], (int)vals[5]);
+	if(APR_SUCCESS != rc)
+	{
+		lfd_log(LFD_ERROR, "handle_pasv: lfd_cmdio_write failed with [%d] and message[%s]", rc, lfd_sess_strerror(sess, rc));
+	}
+	return rc;
 }
 
 // specify an alternate data port by use of the PORT command
