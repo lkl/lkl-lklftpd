@@ -176,7 +176,7 @@ apr_status_t handle_pasv(struct lfd_sess * sess)
 	vals[4] = (unsigned char) (port >> 8);
 	vals[5] = (unsigned char) (port & 0xFF);
 
-	rc = lfd_cmdio_write(sess, FTP_PASVOK, "Entering Passive Mode. %d,%d,%d,%d,%d,%d\n", 
+	rc = lfd_cmdio_write(sess, FTP_PASVOK, "Entering Passive Mode (%d,%d,%d,%d,%d,%d)\n", 
 				(int)vals[0], (int)vals[1], (int)vals[2], 
 				(int)vals[3], (int)vals[4], (int)vals[5]);
 	if(APR_SUCCESS != rc)
