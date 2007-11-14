@@ -12,6 +12,7 @@
 #include "fileops.h"
 #include "config.h"
 #include "connection.h"
+#include "thread_wrapper.h"
 
 
 //TODO: rename and move to apppropriate place
@@ -74,7 +75,7 @@ apr_status_t handle_abort(struct lfd_sess* sess)
 		return APR_SUCCESS;
 	}
 	if(NULL != sess->data_conn->data_conn_th)
-		apr_thread_exit(sess->data_conn->data_conn_th, APR_SUCCESS);
+		wrapper_apr_thread_exit(sess->data_conn->data_conn_th, APR_SUCCESS);
 
 	lfd_data_sess_destroy(sess->data_conn);
 	lfd_cmdio_write(sess, FTP_ABOROK, "File transfer aborted.");
