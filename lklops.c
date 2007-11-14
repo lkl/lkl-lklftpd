@@ -127,7 +127,7 @@ void linux_timer(unsigned long delta)
 
 void linux_exit_idle(void)
 {
-	char c;
+	char c = 0;
 	apr_size_t n=1;
 	
 	apr_file_write(events_pipe_out, &c, &n);
