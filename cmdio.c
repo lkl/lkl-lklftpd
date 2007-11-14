@@ -16,14 +16,6 @@ static void cmd_to_str(int cmd, char * buff)
 	buff[0] = (char) '0' + cmd % 10;
 }
 
-static apr_status_t lfd_cmdio_write_cmd(struct lfd_sess * sess, int cmd)
-{
-	char buff[4];
-	apr_size_t len = 4;
-	cmd_to_str(cmd, buff);
-	return apr_socket_send(sess->comm_sock, buff, &len);
-}
-
 apr_status_t lfd_cmdio_write(struct lfd_sess * sess, int cmd, const char *msg, ...)
 {
 	va_list		  ap;
@@ -31,17 +23,12 @@ apr_status_t lfd_cmdio_write(struct lfd_sess * sess, int cmd, const char *msg, .
 	apr_size_t	  len;
 	apr_status_t	 rc = APR_SUCCESS;
 
-	rc = lfd_cmdio_write_cmd(sess, cmd);
-	if(APR_SUCCESS != rc)
-	{
-		return rc;
-	}
-
-	msg = apr_pstrcat(sess->loop_pool, msg, "\n", NULL);
+	buff = apr_pstrcat(sess->loop_pool, "AAAA", msg, "\n", NULL);
+	cmd_to_str(cmd, buff);
 
 	va_start(ap, msg);
 
-	buff = apr_pvsprintf(sess->loop_pool, msg, ap);
+	buff = apr_pvsprintf(sess->loop_pool, buff, ap);
 	len = strlen(buff);
 	rc = apr_socket_send(sess->comm_sock, buff, &len);
 	va_end(ap);
