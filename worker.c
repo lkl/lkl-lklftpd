@@ -69,11 +69,18 @@ static apr_status_t get_username_password(struct lfd_sess* sess)
 		else
 		{
 			// unknown command; send error message
-			lfd_cmdio_write(sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
+			rc = lfd_cmdio_write(sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
+			if(APR_SUCCESS != rc)
+			{
+				lfd_log(LFD_ERROR, "lfd_cmdio_write get_username_password err[%d] and message[%s]", rc, lfd_sess_strerror(sess, rc));
+				return rc;
+			}
 			continue; //don't ask for the password
 		}
 
-		lfd_cmdio_write(sess, FTP_GIVEPWORD, "Password required for user.");
+		rc = lfd_cmdio_write(sess, FTP_GIVEPWORD, "Password required for user.");
+		if(APR_SUCCESS != rc)
+			return rc;
 
 		rc = lfd_cmdio_get_cmd_and_arg(sess, &sess->ftp_cmd_str, &sess->ftp_arg_str);
 		if(APR_SUCCESS != rc)
@@ -91,12 +98,16 @@ static apr_status_t get_username_password(struct lfd_sess* sess)
 		else
 		{
 			// unknown command; send error message
-			lfd_cmdio_write(sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
+			rc = lfd_cmdio_write(sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
+			if(APR_SUCCESS != rc)
+				return rc;
 			continue;
 		}
 
 		nr_tries ++;
-		lfd_cmdio_write(sess, FTP_LOGINERR, "Incorrect login credentials.");
+		rc = lfd_cmdio_write(sess, FTP_LOGINERR, "Incorrect login credentials.");
+		if(APR_SUCCESS != rc)
+			return rc;
 	}
 	while(nr_tries < lfd_config_max_login_attempts);
 
