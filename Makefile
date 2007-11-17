@@ -3,12 +3,17 @@
 LKL_DEFINES+=-DLKL_FILE_APIS
 LKL=lkl/vmlinux
 
-APR_LIN_INCLUDE=-I/usr/include/apr-1.0/
 APR_WIN_INCLUDE=-Iapr_win/include/
 
 APR_LIN_LIB=-lapr-1 -L/home/gringo/apr12x/.libs/libapr-1.so.0.2.12
 APR_WIN_LIB=apr_win/Debug/libapr-1.lib
 
+CFLAGS_LIN=`apr-config --includes --cppflags`
+CFLAGS_WIN=$(APR_WIN_INCLUDE)
+
+#select here between Linux and Windows
+#CFLAGS_OS=$(CFLAGS_WIN)
+CFLAGS_OS=$(CFLAGS_LIN)
 
 HERE=$(PWD)
 LINUX=$(HERE)/../linux-2.6
@@ -55,8 +60,7 @@ lkl-nt/vmlinux: lkl-nt/.config
 		LKL_DRIVERS=$(HERE)/drivers \
 		vmlinux
 
-CFLAGS=-Wall -g -DFILE_DISK_MAJOR=42 -D_LARGEFILE64_SOURCE $(LKL_DEFINES)	\
-	$(APR_LIN_INCLUDE) 
+CFLAGS=-Wall -g -DFILE_DISK_MAJOR=42 $(CFLAGS_OS) $(LKL_DEFINES)
 
 
 syscalls.o: syscalls.c $(INC)
@@ -80,10 +84,10 @@ TAGS:
 	etags *.c drivers/*.c
 
 daemon.out: $(AOUT) $(INC) include/asm 
-	gcc  $(AOUT) $(APR_LIN_LIB) -o $@
+	$(CC) $(AOUT) $(APR_LIN_LIB) -o $@
 
 daemon.exe: $(AEXE) $(INC)
-	i586-mingw32msvc-gcc $(CFLAGS) $(APR_WIN_INCLUDE) $(AEXE) $(APR_WIN_LIB) -o $@
+	i586-mingw32msvc-gcc $(CFLAGS) $(AEXE) $(APR_WIN_LIB) -o $@
 
 .deps/%.d: %.c
 	mkdir -p .deps/$(dir $<)
