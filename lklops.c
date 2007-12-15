@@ -19,8 +19,10 @@
 volatile int shutting_down = 0;
 static apr_pool_t *pool;
 
+struct apr_thread_wrapper_t;
+
 struct _thread_info {
-        apr_thread_t *thread;
+        apr_thread_wrapper_t *thread;
         apr_thread_mutex_t *sched_mutex;
 	int dead;
 };
@@ -54,7 +56,7 @@ void linux_context_switch(void *prev, void *next)
         apr_thread_mutex_unlock(_next->sched_mutex);
         apr_thread_mutex_lock(_prev->sched_mutex);
 	if (_prev->dead) {
-		apr_thread_t *thread=_prev->thread;
+		apr_thread_wrapper_t *thread=_prev->thread;
 		apr_thread_mutex_destroy(_prev->sched_mutex);
 		free(_prev);
 		debug_thread_count--;
@@ -196,13 +198,13 @@ static struct linux_native_operations lnops = {
 void* APR_THREAD_FUNC init_thread(apr_thread_t *thr, void *arg)
 {
 	linux_start_kernel(&lnops, "");
-	wrapper_apr_thread_exit(thr, 0);
+	apr_thread_exit(thr, 0);
 	return NULL;
 }
-
+static apr_thread_t *init_thread_handle;
 void lkl_init(int (*init_2)(void))
 {
-	apr_thread_t *init;
+
 	lnops.init=init_2;
 
 	apr_pool_create(&pool, NULL);
@@ -224,7 +226,7 @@ void lkl_init(int (*init_2)(void))
 	};
 	apr_pollset_add(pollset, &apfd);
 
-	wrapper_apr_thread_create(&init, NULL, init_thread, NULL, pool);
+	apr_thread_create(&init_thread_handle, NULL, init_thread, NULL, pool);
 }
 
 extern long wrapper_sys_halt();
@@ -234,9 +236,11 @@ extern long wrapper_sys_umount(const char*, int);
 
 void lkl_fini(unsigned int flag)
 {
+        apr_status_t rc;
 	shutting_down = 1;
 	if(0 == (flag & LKL_FINI_DONT_UMOUNT_ROOT))
 		wrapper_sys_umount("/", 0);
 	wrapper_sys_halt();
 	wrapper_apr_thread_join_all();
+        apr_thread_join(&rc, init_thread_handle);
 }

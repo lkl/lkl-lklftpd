@@ -82,7 +82,7 @@ void lfd_listen(apr_pool_t * mp)
 	apr_pool_t		* thd_pool = NULL;
 	apr_socket_t		* listen_sock;
 	apr_socket_t		* client_sock;
-	apr_thread_t 		* thd;
+	apr_thread_wrapper_t 	* thd;
 	apr_threadattr_t	* thattr;
 	apr_pollfd_t		  pfd;
 	apr_interval_time_t	  timeout = lfd_config_max_acceptloop_timeout;

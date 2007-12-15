@@ -310,6 +310,8 @@ static void * APR_THREAD_FUNC lfd_worker_protocol_main_impl(apr_thread_t * thd, 
 void * APR_THREAD_FUNC lfd_worker_protocol_main(apr_thread_t * thd, void* param)
 {
 	void * APR_THREAD_FUNC ret = lfd_worker_protocol_main_impl(thd, param);
-	wrapper_apr_thread_exit(thd, 0);
+	//wrapper_apr_thread_exit(thd, 0);
+        //TODO: check if we should or not call wrapper_apr_thread_exit()
+        apr_thread_exit(thd, 0);
 	return ret;
 }
