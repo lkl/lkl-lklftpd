@@ -62,10 +62,7 @@
 #include <apr_poll.h>
 #include <apr_strings.h>
 
-#include <linux/fcntl.h>
-#include <linux/types.h>
-#include <linux/dirent.h>
-
+#include <asm/lkl.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -99,10 +96,10 @@ struct lkl_dir_t
 	apr_pool_t *pool;
 	char * dirname; // dir name
 	int fd; // file descriptor
-	struct linux_dirent * data; // dir block
+	struct __kernel_dirent * data; // dir block
 	int offset; // current offset
 	int size; // total valid data
-	struct dirent *entry; // current entry
+	struct __kernel_dirent *entry; // current entry
 };
 typedef struct lkl_dir_t lkl_dir_t;
 

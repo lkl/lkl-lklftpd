@@ -14,7 +14,6 @@
 #include "cmdhandler.h"
 #include "sess.h"
 #include "connection.h"
-#include "thread_wrapper.h"
 
 extern volatile apr_uint32_t ftp_must_exit;
 static apr_status_t emit_greeting(struct lfd_sess * sess)

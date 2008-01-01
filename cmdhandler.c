@@ -12,7 +12,6 @@
 #include "fileops.h"
 #include "config.h"
 #include "connection.h"
-#include "thread_wrapper.h"
 
 
 //TODO: rename and move to apppropriate place

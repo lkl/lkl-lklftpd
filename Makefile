@@ -1,14 +1,14 @@
 #uncoment the next 2 lines to get LKL's file APIs. This currently works on linux only
 .PHONY=clean
-LKL_DEFINES+=-DLKL_FILE_APIS
-LKL=lkl/vmlinux
+LKL_DEFINES+=-DLKL_FILE_APIS -Iinclude
+LKL=$(CROSS)lkl/vmlinux $(CROSS)lkl/env.a
 
 APR_WIN_INCLUDE=-Iapr_win/include/
 
 APR_LIN_LIB=-lapr-1 -L/home/gringo/apr12x/.libs/libapr-1.so.0.2.12
 APR_WIN_LIB=apr_win/Debug/libapr-1.lib
 
-CFLAGS_LIN=`apr-config --includes --cppflags`
+CFLAGS_LIN=$(shell apr-config --includes --cppflags)
 CFLAGS_WIN=$(APR_WIN_INCLUDE)
 
 #select here between Linux and Windows
@@ -42,37 +42,32 @@ include/linux:
 	-$(MKDIR) `dirname $@`
 	ln -s $(LINUX)/include/linux include/linux
 
-%.config: $(LINUX)/arch/lkl/defconfig
-	-mkdir `dirname $@`
-	cp $^ $@
-
 INC=include/asm include/asm-generic include/asm-i386 include/linux
 
-lkl/vmlinux: lkl/.config drivers/*.c drivers/Makefile
+$(CROSS)lkl/.config: .config 
+	mkdir -p $(CROSS)lkl && \
+	cp $< $@
+
+$(CROSS)lkl/vmlinux: $(CROSS)lkl/.config 
 	cd $(LINUX) && \
-	$(MAKE) O=$(HERE)/`dirname $@` ARCH=lkl \
-		LKL_DRIVERS=$(HERE)/drivers \
-		vmlinux
+	$(MAKE) O=$(HERE)/$(CROSS)lkl ARCH=lkl \
+	CROSS_COMPILE=$(CROSS) \
+	vmlinux
 
-lkl-nt/vmlinux: lkl-nt/.config
+$(CROSS)lkl/env.a: $(CROSS)lkl/.config 
 	cd $(LINUX) && \
-	$(MAKE) O=$(HERE)/`dirname $@` ARCH=lkl CROSS_COMPILE=i586-mingw32msvc- \
-		LKL_DRIVERS=$(HERE)/drivers \
-		vmlinux
+	$(MAKE) O=$(HERE)/$(CROSS)lkl ARCH=lkl \
+	CROSS_COMPILE=$(CROSS) \
+	EXTRA_CFLAGS="$(CFLAGS_OS)" \
+	env.a
 
-CFLAGS=-Wall -g -DFILE_DISK_MAJOR=42 $(CFLAGS_OS) $(LKL_DEFINES)
-
-
-syscalls.o: syscalls.c $(INC)
-	$(CC) -c $(CFLAGS) -Iinclude $< 
-
+CFLAGS=-Wall -g $(CFLAGS_OS) $(LKL_DEFINES)
 
 %.o: %.c $(INC)
 	$(CC) -c $(CFLAGS) $< 
 
-
-AOUT=$(OBJS) lkl/vmlinux
-AEXE=$(OBJS) lkl-nt/vmlinux
+AOUT=$(OBJS) $(LKL) 
+AEXE=$(OBJS) $(LKL)
 
 clean:
 	-rm -rf daemon.out daemon.exe include *.o drivers/*.o drivers/built-in* drivers/.*.cmd .deps/ *~
@@ -83,11 +78,13 @@ clean-all: clean
 TAGS: 
 	etags *.c drivers/*.c
 
-daemon.out: $(AOUT) $(INC) include/asm 
+daemon.out: $(AOUT) $(INC) 
 	$(CC) $(AOUT) $(APR_LIN_LIB) -o $@
 
-daemon.exe: $(AEXE) $(INC)
-	i586-mingw32msvc-gcc $(CFLAGS) $(AEXE) $(APR_WIN_LIB) -o $@
+daemon.exe: CROSS=i586-mingw32msvc-
+
+daemon.exe: $(AEXE) $(INC) 
+	$(CROSS)gcc $(CFLAGS) $(AEXE) $(APR_WIN_LIB) -o $@
 
 .deps/%.d: %.c
 	mkdir -p .deps/$(dir $<)

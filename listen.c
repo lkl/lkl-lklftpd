@@ -5,12 +5,11 @@
 #include <apr_thread_proc.h>
 #include <apr_poll.h>
 
-#include "syscalls.h"
 #include "listen.h"
 #include "config.h"
 #include "utils.h"
 #include "worker.h"
-#include "thread_wrapper.h"
+
 
 extern volatile apr_uint32_t ftp_must_exit;
 static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
@@ -82,7 +81,7 @@ void lfd_listen(apr_pool_t * mp)
 	apr_pool_t		* thd_pool = NULL;
 	apr_socket_t		* listen_sock;
 	apr_socket_t		* client_sock;
-	apr_thread_wrapper_t 	* thd;
+	apr_thread_t *thd;
 	apr_threadattr_t	* thattr;
 	apr_pollfd_t		  pfd;
 	apr_interval_time_t	  timeout = lfd_config_max_acceptloop_timeout;
@@ -149,11 +148,7 @@ void lfd_listen(apr_pool_t * mp)
 			}
 			continue;
 		}
-		#ifdef LKL_FILE_APIS
-			//###: is this a proper place to issue an "flush buffers to disk"?
-			wrapper_sys_sync();
-		#endif
-		rc = wrapper_apr_thread_create(&thd, thattr, &lfd_worker_protocol_main, (void*)client_sock, thd_pool);
+		rc = apr_thread_create(&thd, thattr, &lfd_worker_protocol_main, (void*)client_sock, thd_pool);
 		if(APR_SUCCESS != rc)
 		{
 			lfd_log(LFD_ERROR, "apr_thread_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));

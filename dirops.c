@@ -1,7 +1,7 @@
 #ifdef LKL_FILE_APIS
 
 #include "fileops.h"
-#include "syscalls.h"
+
 
 #define BUF_SIZE 4096
 
@@ -11,14 +11,14 @@ static apr_status_t dir_cleanup(void *thedir)
 	lkl_dir_t *dir = thedir;
 	apr_status_t rc;
 
-	rc = wrapper_sys_close(dir->fd);
+	rc = lkl_sys_close(dir->fd);
 	return rc;
 }
 
 apr_status_t lkl_dir_open(lkl_dir_t **new, const char *dirname,
                           apr_pool_t *pool)
 {
-	int dir = wrapper_sys_open(dirname,O_RDONLY|O_DIRECTORY|O_LARGEFILE, 0);
+	int dir = lkl_sys_open(dirname,O_RDONLY|O_DIRECTORY|O_LARGEFILE, 0);
 
 	if (dir < 0)
 		return APR_EINVAL;
@@ -29,7 +29,7 @@ apr_status_t lkl_dir_open(lkl_dir_t **new, const char *dirname,
 	(*new)->size = 0;
 	(*new)->offset = 0;
 	(*new)->entry = NULL;
-	(*new)->data = (struct linux_dirent*) apr_pcalloc(pool,BUF_SIZE);
+	(*new)->data = (struct __kernel_dirent*) apr_pcalloc(pool,BUF_SIZE);
 	apr_pool_cleanup_register((*new)->pool, *new, dir_cleanup,
                           apr_pool_cleanup_null);
 
@@ -48,7 +48,7 @@ apr_status_t lkl_dir_make(const char *path, apr_fileperms_t perm,
 	apr_status_t rc;
 	mode_t mode = lkl_unix_perms2mode(perm);
 
-	rc = wrapper_sys_mkdir(path, mode);
+	rc = lkl_sys_mkdir(path, mode);
 	return -rc;
 }
 
@@ -56,25 +56,25 @@ apr_status_t lkl_dir_remove(const char *path, apr_pool_t *pool)
 {
 	apr_status_t rc;
 
-	rc = wrapper_sys_rmdir(path);
+	rc = lkl_sys_rmdir(path);
 	return -rc;
 }
 
 
-struct dirent * lkl_readdir(lkl_dir_t *thedir)
+struct __kernel_dirent * lkl_readdir(lkl_dir_t *thedir)
 {
-	struct dirent * de;
+	struct __kernel_dirent * de;
 
 	if(thedir->offset >= thedir->size)
 	{
 		/* We've emptied out our buffer.  Refill it.  */
-		int bytes = wrapper_sys_getdents(thedir->fd, thedir->data, BUF_SIZE);
+		int bytes = lkl_sys_getdents(thedir->fd, thedir->data, BUF_SIZE);
 		if(bytes <= 0)
 			return NULL;
 		thedir->size = bytes;
 		thedir->offset = 0;
 	}
-	de = (struct dirent*) ((char*) thedir->data+thedir->offset);
+	de = (struct __kernel_dirent*) ((char*) thedir->data+thedir->offset);
 	thedir->offset += de->d_reclen;
 
 	return de;
