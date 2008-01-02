@@ -38,10 +38,11 @@ apr_pool_t	* root_pool;
 
 #ifdef LKL_FILE_APIS
 static const char *disk_image="disk";
-static const char *fs_type="ext3";
+static char *fs_type=NULL;
 static int ro=0;
 static __kernel_dev_t devno;
 static apr_file_t *disk_file;
+char mount_point[32];
 
 int lkl_init(void)
 {
@@ -63,7 +64,7 @@ int lkl_init(void)
 		return -1;
 	}
 
-	devno=lkl_disk_add_disk(disk_file, disk_image, 0, fi.size/512);
+	devno=lkl_disk_add_disk(disk_file, fi.size/512);
 	if (devno == 0) {
 		apr_file_close(disk_file);
 		return -1;
@@ -72,31 +73,6 @@ int lkl_init(void)
 	return 0;
 }
 
-int lkl_mount(void)
-{
-	char dev_str[]= { "/dev/xxxxxxxxxxxxxxxx" };
-	int err;
-
-	snprintf(dev_str, sizeof(dev_str), "/dev/%016x", devno);
-	err=lkl_sys_mknod(dev_str, S_IFBLK|0600, devno);
-	if (err != 0)
-		return err;
-
-
-	err=lkl_sys_mount(dev_str, "/root", (char*)fs_type, 0, 0);
-	if (err != 0)
-		return err;
-
-	err=lkl_sys_chdir("/root");
-	if (err != 0)
-		return err;
-
-	err=lkl_sys_chroot(".");
-	if (err != 0)
-		return err;
-
-	return 0;
-}
 #endif
 
 static const apr_getopt_option_t opt_option[] = {
@@ -216,7 +192,8 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	if (lkl_env_init(lkl_init, 16*1024*1024) != 0) 
 		return -1;
 
-	if ((rc=lkl_mount()) < 0) {
+	if ((rc=lkl_mount_dev(devno, fs_type, 0, NULL, mount_point, sizeof(mount_point))) < 0 ||
+	    (rc=lkl_sys_chdir(mount_point)) < 0 || (rc=lkl_sys_chroot(".")) < 0) {
 		//FIXME: add string error code; note that the error code is not
 		//compatible with apr (unless you are running on linux/i386); we
 		//most likely need error codes strings in lkl itself; need to

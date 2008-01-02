@@ -84,7 +84,7 @@ daemon.out: $(AOUT) $(INC)
 daemon.exe: CROSS=i586-mingw32msvc-
 
 daemon.exe: $(AEXE) $(INC) 
-	$(CROSS)gcc $(CFLAGS) $(AEXE) $(APR_WIN_LIB) -o $@
+	$(CROSS)gcc $(AEXE) $(APR_WIN_LIB) -o $@
 
 .deps/%.d: %.c
 	mkdir -p .deps/$(dir $<)
