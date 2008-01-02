@@ -42,7 +42,7 @@ static char *fs_type=NULL;
 static int ro=0;
 static __kernel_dev_t devno;
 static apr_file_t *disk_file;
-char mount_point[32];
+static char mount_point[32];
 
 int lkl_init(void)
 {
