@@ -48,12 +48,7 @@ int lkl_init(void)
 {
 	apr_finfo_t fi;
 	apr_status_t rc;
-
-	rc=apr_stat(&fi, disk_image, APR_FINFO_SIZE, root_pool);
-	if (rc != APR_SUCCESS) {
-		lfd_log(LFD_ERROR, "failed to stat disk image '%s': %s", disk_image, lfd_apr_strerror_thunsafe(rc));
-		return -1;
-	}
+	apr_off_t off=0;
 
 	rc=apr_file_open(&disk_file, disk_image,
 			 APR_FOPEN_READ| (ro?0:APR_FOPEN_WRITE)|
@@ -64,7 +59,13 @@ int lkl_init(void)
 		return -1;
 	}
 
-	devno=lkl_disk_add_disk(disk_file, fi.size/512);
+	rc=apr_file_seek(disk_file, APR_END, &off);
+	if (rc != APR_SUCCESS) {
+		lfd_log(LFD_ERROR, "failed to seek to the end of'%s': %s", disk_image, lfd_apr_strerror_thunsafe(rc));
+		return -1;
+	}
+
+	devno=lkl_disk_add_disk(disk_file, off/512);
 	if (devno == 0) {
 		apr_file_close(disk_file);
 		return -1;
@@ -114,7 +115,7 @@ static int parse_command_line(int argc, char const *const * argv)
 	{
 		switch (optch)
 		{
-#ifdef LKL_APIS
+#ifdef LKL_FILE_APIS
 		case 'r':
 			ro=1;
 			break;
