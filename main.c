@@ -44,9 +44,8 @@ static __kernel_dev_t devno;
 static apr_file_t *disk_file;
 static char mount_point[32];
 
-int lkl_init(void)
+int lkl_add_disk(void)
 {
-	apr_finfo_t fi;
 	apr_status_t rc;
 	apr_off_t off=0;
 
@@ -120,7 +119,7 @@ static int parse_command_line(int argc, char const *const * argv)
 			ro=1;
 			break;
 		case 't':
-			fs_type=optarg;
+			fs_type=(char*)optarg;
 			break;
 		case 'f':
 			disk_image=optarg;
@@ -190,17 +189,21 @@ int main(int argc, char const *const * argv, char const *const * engv)
 #endif
 
 #ifdef LKL_FILE_APIS
-	if (lkl_env_init(lkl_init, 16*1024*1024) != 0) 
+	if (lkl_env_init(16*1024*1024) != 0) 
 		return -1;
 
-	if ((rc=lkl_mount_dev(devno, fs_type, 0, NULL, mount_point, sizeof(mount_point))) < 0 ||
-	    (rc=lkl_sys_chdir(mount_point)) < 0 || (rc=lkl_sys_chroot(".")) < 0) {
+	if ((rc=lkl_add_disk()) < 0 ||
+	    (rc=lkl_mount_dev(devno, fs_type, 0, NULL, mount_point,
+			      sizeof(mount_point))) < 0 ||
+	    (rc=lkl_sys_chdir(mount_point)) < 0 ||
+	    (rc=lkl_sys_chroot(".")) < 0) {
 		//FIXME: add string error code; note that the error code is not
 		//compatible with apr (unless you are running on linux/i386); we
 		//most likely need error codes strings in lkl itself; need to
 		//fix other cases as well
 		lkl_sys_halt();
-		apr_file_close(disk_file);
+		if (disk_file)
+			apr_file_close(disk_file);
 		lfd_log(LFD_ERROR, "failed to mount disk: %d", rc);
 		return -1;
 	}
