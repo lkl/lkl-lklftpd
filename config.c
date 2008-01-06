@@ -9,8 +9,9 @@ int lfd_config_data_port = 20;
 int lfd_config_connect_port = 20;
 int lfd_config_min_pasv_port = 1024;
 int lfd_config_max_pasv_port = 65535;
+int lfd_config_debug=0;
 const char * lfd_config_listen_host = "localhost";
-const char * lfd_config_banner_string = "Welcome to LklFtp Server.";
+const char * lfd_config_banner_string = "Welcome to LklFtp Server.\r";
 int lfd_config_backlog = 5;
 int lfd_config_max_sockets_to_try_to_bind = 10; //PASSIVE mode needs to bind 
 		//to a nonreserved port. This is the limit of number of tries

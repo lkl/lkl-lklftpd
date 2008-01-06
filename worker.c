@@ -31,95 +31,6 @@ static int lfd_cmdio_cmd_equals(struct lfd_sess*sess, const char * cmd)
 	return sess->ftp_cmd_str && (0 == apr_strnatcasecmp(sess->ftp_cmd_str, cmd));
 }
 
-static void init_username_related_fields(struct lfd_sess * sess)
-{
-	apr_status_t 	rc;
-	apr_finfo_t	thisfinfo;
-	sess->user = apr_pstrdup(sess->sess_pool, sess->user);
-	
-	//TODO: ### This is Linux centric! Make it go to the propper directory on windows.
-	sess->home_str = apr_pstrcat(sess->sess_pool, "/home/", sess->user, "/", NULL);
-	
-	//try to stat the directory. If it isn't accessible, fallback to the "/" root.
-	rc = lkl_stat(&thisfinfo, sess->home_str, APR_FINFO_TYPE, sess->loop_pool);
-	if ( (APR_SUCCESS != rc) || (APR_DIR != thisfinfo.filetype) )
-		sess->home_str = "/";
-	
-	sess->cwd_path = apr_pstrdup(sess->sess_pool, sess->home_str);
-}
-
-static apr_status_t get_username_password(struct lfd_sess* sess)
-{
-	apr_status_t	rc;
-	int		pass_ok = 0, user_ok = 0;
-	int		nr_tries = 0;
-
-
-	do
-	{
-		rc = lfd_cmdio_get_cmd_and_arg(sess, &sess->ftp_cmd_str, &sess->ftp_arg_str);
-		if(APR_SUCCESS != rc)
-			return rc;
-
-		if(lfd_cmdio_cmd_equals(sess, "USER"))
-		{
-			user_ok = handle_user_cmd(sess);
-		}
-		else
-		{
-			// unknown command; send error message
-			rc = lfd_cmdio_write(sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
-			if(APR_SUCCESS != rc)
-			{
-				lfd_log(LFD_ERROR, "lfd_cmdio_write get_username_password err[%d] and message[%s]", rc, lfd_sess_strerror(sess, rc));
-				return rc;
-			}
-			continue; //don't ask for the password
-		}
-
-		rc = lfd_cmdio_write(sess, FTP_GIVEPWORD, "Password required for user.");
-		if(APR_SUCCESS != rc)
-			return rc;
-
-		rc = lfd_cmdio_get_cmd_and_arg(sess, &sess->ftp_cmd_str, &sess->ftp_arg_str);
-		if(APR_SUCCESS != rc)
-			return rc;
-
-		if(lfd_cmdio_cmd_equals(sess, "PASS"))
-		{
-			pass_ok = handle_pass_cmd(sess);
-			if(pass_ok && user_ok)
-			{
-				lfd_cmdio_write(sess, FTP_LOGINOK, "LOGIN OK.");
-				break;
-			}
-		}
-		else
-		{
-			// unknown command; send error message
-			rc = lfd_cmdio_write(sess, FTP_LOGINERR, "Please log in with USER and PASS first.");
-			if(APR_SUCCESS != rc)
-				return rc;
-			continue;
-		}
-
-		nr_tries ++;
-		rc = lfd_cmdio_write(sess, FTP_LOGINERR, "Incorrect login credentials.");
-		if(APR_SUCCESS != rc)
-			return rc;
-	}
-	while(nr_tries < lfd_config_max_login_attempts);
-
-	if (nr_tries >= lfd_config_max_login_attempts)
-		return APR_EINVAL;
-
-	init_username_related_fields(sess);
-
-	return APR_SUCCESS;
-}
-
-
-
 static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 {
 	apr_status_t	  rc = APR_SUCCESS;
@@ -160,6 +71,14 @@ static apr_status_t ftp_protocol_loop(struct lfd_sess * sess)
 		else if(lfd_cmdio_cmd_equals(sess, "SYST"))
 		{
 			rc = handle_syst(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "USER"))
+		{
+			rc = handle_user(sess);
+		}
+		else if(lfd_cmdio_cmd_equals(sess, "PASS"))
+		{
+			rc = handle_pass(sess);
 		}
 		else if(lfd_cmdio_cmd_equals(sess, "QUIT"))
 		{
@@ -284,14 +203,6 @@ static void * APR_THREAD_FUNC lfd_worker_protocol_main_impl(apr_thread_t * thd, 
 		rc = emit_greeting(sess);
 		if(APR_SUCCESS != rc)
 			lfd_log(LFD_ERROR, "emit_greeting failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
-	}
-
-
-	if(APR_SUCCESS == rc)
-	{
-		rc = get_username_password(sess);
-		if(APR_SUCCESS != rc)
-			lfd_log(LFD_ERROR, "get_username_password failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
 	}
 
 

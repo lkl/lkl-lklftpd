@@ -28,10 +28,6 @@ struct lfd_sess
 	apr_pool_t		* sess_pool; 			//use this pool to allocate objects that have meaning durring the whole lifetime of the session.
 	char 			* cmd_input_buffer;		//buffer used for reading commands
 	char			* dbg_strerror_buffer; 		//this buffer is used to map string error numbers to error descriptions.
-	char			* user;				// the user's name for this session
-	//TODO:### decide if this is needed:
-	//char			* passwd;			// user's password for this session
-	char			* home_str;			// user's home directory. ALWAYS ENDING WITH A TRAILING SLASH! Used when expanding the "~" in a path.
 	char			* ftp_cmd_str;			// command body
 	char			* ftp_arg_str;			// command argument
 	char			* cwd_path;			// the user's current working directory

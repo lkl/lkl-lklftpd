@@ -17,30 +17,19 @@
 //TODO: rename and move to apppropriate place
 #define VSFTP_DATA_BUFSIZE      65536
 
-
-int handle_user_cmd(struct lfd_sess* sess)
+apr_status_t handle_user(struct lfd_sess * sess)
 {
-	//###: any user is accepted
-	//we're allocating from the loop pool for now. 
-	// Allocate from the sess pool when the user logs in successfully
-	sess->user = apr_pstrdup(sess->loop_pool, sess->ftp_arg_str);
-	
-	//sanitize the input: We don't accept usernames with '/' in the name 
-	// because we use the name to determine the home directory as in 
-	// "/home/%USERNAME%" and a slash in the name will point to a subdirectory
-	// of another user.
-	if(strchr(sess->user, '/'))
-		return 0;
-	return 1;
+	apr_status_t rc;
+	rc = lfd_cmdio_write(sess, FTP_LOGINOK, "Login successful.");
+	return rc;
 }
 
-int handle_pass_cmd(struct lfd_sess* sess)
+apr_status_t handle_pass(struct lfd_sess * sess)
 {
-	//###: any pass is accepted
-	return 1;
+	apr_status_t rc;
+	rc = lfd_cmdio_write(sess, FTP_LOGINOK, "Login successful.");
+	return rc;
 }
-
-
 
 apr_status_t handle_syst(struct lfd_sess * sess)
 {
@@ -86,45 +75,9 @@ apr_status_t handle_abort(struct lfd_sess* sess)
 }
 
 
-static char * resolve_tilde(const char * str, struct lfd_sess* sess, apr_pool_t * allocator_pool)
+static char * get_abs_path(const char * path, struct lfd_sess *sess, apr_pool_t * allocator_pool)
 {
-	size_t len;
-	len = strlen(str);
-	
-	if (NULL == str)
-		return NULL;
-	
-	
-	if (len > 0 && '~' == str[0])
-	{
-		if (1 == len)
-		{
-			return apr_pstrdup(allocator_pool, sess->home_str);
-		}
-		else if('/' == str[1])
-		{
-			return apr_pstrcat(allocator_pool, sess->home_str, str+2, NULL);
-		}
-		else
-		{
-			//we don't support ~asdf kind of paths.
-			return NULL;
-		}
-	}
-	return apr_pstrdup(allocator_pool, str);
-}
-
-static char * get_abs_path(const char * original_path, struct lfd_sess *sess, apr_pool_t * allocator_pool)
-{
-	char * path;
-
-	if ( (NULL == original_path) || ('\0' == original_path[0]) )
-		return NULL;
-	
-	//this is only temp, so allocating from loop_pool is fine.
-	path = resolve_tilde(original_path, sess, sess->loop_pool);
-	
-	if (NULL == path)
+	if ( (NULL == path) || ('\0' == path[0]) )
 		return NULL;
 	
 	
@@ -140,7 +93,6 @@ static char * get_abs_path(const char * original_path, struct lfd_sess *sess, ap
 		path = apr_pstrcat(allocator_pool, sess->cwd_path, path, NULL);
 	}
 	
-	//TODO: remove double (or more) "/" from the path
 	return path;
 }
 
@@ -836,8 +788,10 @@ apr_status_t handle_stou(struct lfd_sess *sess)
 	return handle_upload_common(sess, 0, 1);
 }
 
+#define LIST_FLAG_A 0x01
+#define LIST_FLAG_L 0x02
 
-static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** p_dest, int la)
+static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** p_dest, int list_flags)
 {
 	lkl_dir_t	* dir;
 	apr_finfo_t	  finfo;
@@ -860,12 +814,10 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 	{
 		char buffer[1024];
 
-		if(finfo.filetype == APR_DIR && ((finfo.name[0] == '.' && finfo.name[1] == '\0')))
-			continue;
-		if (!la && finfo.name[1] == '.' && finfo.name[2] == '\0')
+		if(!(list_flags&LIST_FLAG_A) && finfo.name[0] == '.')
 			continue;
 
-		if (la) {
+		if (list_flags&LIST_FLAG_L) {
 			char time_string[3+1+2+1+5+1];
 			const char *time_fmt;
 			apr_time_exp_t exp_time, exp_now;
@@ -879,7 +831,7 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 				time_fmt="%b %d %Y";
 			apr_strftime(time_string, &dummy, sizeof(time_string), time_fmt, &exp_time);
 
-			snprintf(buffer, sizeof(buffer), "%c%c%c%c%c%c%c%c%c%c ftp ftp %d %s %s\n",
+			snprintf(buffer, sizeof(buffer), "%c%c%c%c%c%c%c%c%c%c ftp ftp %d %s %s",
 				 (finfo.filetype == APR_DIR)?'d':'-',
 				 /* user permission */
 				 (finfo.protection&00400)?'r':'-',
@@ -911,19 +863,19 @@ apr_status_t handle_list(struct lfd_sess *sess)
 	apr_size_t		  file_list_len, bytes_written;
 	char			* file_list;
 	char			* path;
-	int la=0;
+	int flags = LIST_FLAG_L;
 
 	// if the arg was NULL, take the current directory
-	if(NULL == sess->ftp_arg_str || strcmp(sess->ftp_arg_str, "-la") == 0)
-	{
-		if (sess->ftp_arg_str != NULL)
-			la=1;
+	if(sess->ftp_arg_str) {
+		if (sess->ftp_arg_str[0] == '-') {
+			if (strchr(sess->ftp_arg_str+1,'a'))
+				flags|=LIST_FLAG_A;
+			path = apr_pstrdup(sess->loop_pool, sess->cwd_path);
+		} else
+			path = get_abs_path(sess->ftp_arg_str, sess, sess->loop_pool);
+	} else
 		path = apr_pstrdup(sess->loop_pool, sess->cwd_path);
-	}
-	else
-	{
-		path = get_abs_path(sess->ftp_arg_str, sess, sess->loop_pool);
-	}
+
 	
 	if(NULL == path)
 	{
@@ -931,7 +883,7 @@ apr_status_t handle_list(struct lfd_sess *sess)
 		return APR_EINVAL;
 	}
 	
-	rc = list_dir(path, sess->loop_pool, &file_list, la);
+	rc = list_dir(path, sess->loop_pool, &file_list, flags);
 	if(APR_SUCCESS != rc)
 	{
 		lfd_log(LFD_ERROR, "list_dir failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
@@ -985,7 +937,7 @@ apr_status_t handle_site(struct lfd_sess* sess)
 apr_status_t handle_feat(struct lfd_sess* sess)
 {
 	//TODO: add error handling
-	lfd_cmdio_write(sess, FTP_FEAT, "Features:" 
+	lfd_cmdio_write(sess, FTP_FEAT+FTP_MORE, "Features:" 
 /*" EPRT\r\n"
 " EPSV\r\n"
 " MDTM\r\n"

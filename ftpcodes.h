@@ -73,4 +73,7 @@
 #define FTP_NOPERM            550
 #define FTP_UPLOADFAIL        553
 
+/* Add this constant to partia responses */
+#define FTP_MORE 100000
+
 #endif//LKLFTPD_FTPCODES_H__

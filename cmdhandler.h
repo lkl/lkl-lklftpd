@@ -5,8 +5,8 @@
 
 
 // login commands
-int handle_user_cmd(struct lfd_sess* sess);
-int handle_pass_cmd(struct lfd_sess* sess);
+int handle_user(struct lfd_sess* sess);
+int handle_pass(struct lfd_sess* sess);
 
 
 // abort/quit

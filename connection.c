@@ -1,4 +1,4 @@
-#include <apr.h>
+
 #include <apr_strings.h>
 #include <apr_poll.h>
 
@@ -176,7 +176,7 @@ apr_status_t handle_pasv(struct lfd_sess * sess)
 	vals[4] = (unsigned char) (port >> 8);
 	vals[5] = (unsigned char) (port & 0xFF);
 
-	rc = lfd_cmdio_write(sess, FTP_PASVOK, "Entering Passive Mode (%d,%d,%d,%d,%d,%d)\n", 
+	rc = lfd_cmdio_write(sess, FTP_PASVOK, "Entering Passive Mode (%d,%d,%d,%d,%d,%d)", 
 				(int)vals[0], (int)vals[1], (int)vals[2], 
 				(int)vals[3], (int)vals[4], (int)vals[5]);
 	if(APR_SUCCESS != rc)
@@ -314,72 +314,24 @@ static apr_status_t get_bound_and_connected_ftp_port_sock(struct lfd_sess* sess,
 	return APR_SUCCESS;
 }
 
-/**
- * @brief Get a connected socket to the client's listening data port.
- * Also binds the local end of the socket to a configurable (default 20) data port.
- */
-static apr_status_t get_bound_and_connected_ftp_pasv_sock(struct lfd_sess* sess, apr_socket_t ** psock)
-{
-	apr_pollfd_t	poolfd;
-	apr_int32_t	nsds;
-	apr_status_t	rc = APR_SUCCESS;
-	int 		nr_tries = lfd_config_pasv_max_accept_tries;
-	
-	poolfd.p         = sess->loop_pool;
-	poolfd.desc_type = APR_POLL_SOCKET;
-	poolfd.reqevents = APR_POLLIN|APR_POLLHUP|APR_POLLERR;
-	poolfd.rtnevents = 0;
-	poolfd.desc.s    = sess->pasv_listen_fd;
-	
-	while( nr_tries )
-	{
-		while( (-- nr_tries) && (APR_SUCCESS == rc) )
-		{
-			poolfd.rtnevents = 0;
-			rc = apr_poll(&poolfd, 1, &nsds, apr_time_from_sec(lfd_config_pasv_listen_socket_timeout));
-			if ( APR_STATUS_IS_TIMEUP(rc) || APR_STATUS_IS_EINTR(rc) )
-			{
-				rc = APR_SUCCESS;
-				continue;
-			}
-			//if there is no error but, there isn't anyone trying to connect to us
-			if ( (APR_SUCCESS == rc) && (0 == (APR_POLLIN & poolfd.rtnevents)) )
-				continue;
-			
-			//on other errors or when someone wants to connect to us break
-			break;
-		}
-		
-		
-		if ( (APR_SUCCESS == rc) && (APR_POLLIN & poolfd.rtnevents) )
-		{
-			//we exited and we have an outstanding socket to accept.
-			rc = apr_socket_accept(psock, sess->pasv_listen_fd, sess->sess_pool);
-			if( APR_SUCCESS == rc )
-				break;
-		}
-		rc = APR_ENOSOCKET;
-	}	
-	//remove all information related to the passive listening socket.
-	pasv_cleanup(sess);
-	return rc;
-}
-
 static apr_status_t lfd_ftpdataio_get_pasv_fd(struct lfd_sess* sess, apr_socket_t ** psock)
 {
 	apr_status_t	  rc;
-	apr_socket_t	* remote_fd;
 	*psock = NULL;
-	rc = get_bound_and_connected_ftp_pasv_sock(sess, &remote_fd);
+
+	/*
+	 * FIXME: need timeout
+	 */
+	rc=apr_socket_accept(psock, sess->pasv_listen_fd, sess->loop_pool);
 	if (APR_SUCCESS != rc)
 	{
-		lfd_cmdio_write(sess, FTP_BADSENDCONN, "Failed to establish connection.");
-		lfd_log(LFD_ERROR, "get_bound_and_connected_ftp_pasv_sock failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_cmdio_write(sess, FTP_BADSENDCONN, "Failed to accept connection.");
+		lfd_log(LFD_ERROR, "%s failed with errorcode[%d] and error message[%s]", __FUNCTION__, rc, lfd_sess_strerror(sess, rc));
 		return rc;
 	}
 
-	init_data_sock_params(sess, remote_fd);
-	*psock = remote_fd;
+	init_data_sock_params(sess, *psock);
+
 	return APR_SUCCESS;
 }
 

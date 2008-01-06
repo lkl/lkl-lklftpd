@@ -1,3 +1,5 @@
+#include <apr_strings.h>
+
 #include "sess.h"
 #include "utils.h"
 
@@ -28,6 +30,7 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 	sess->dbg_strerror_buffer = apr_pcalloc(sess_pool, STR_ERROR_MAX_LEN);
 
 	sess->data_conn = apr_pcalloc(sess_pool, sizeof(struct lfd_data_sess));
+	sess->cwd_path = apr_pstrdup(sess->sess_pool, "/");
 
 	return APR_SUCCESS;
 }

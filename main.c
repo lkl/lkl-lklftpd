@@ -83,6 +83,7 @@ static const apr_getopt_option_t opt_option[] = {
 	{ "filename", 'f', TRUE, "path to disk (image) to use" },
 #endif
 	{ "port", 'p', TRUE, "port to listen on" },
+	{ "debug", 'd', TRUE, "debug level" },
 	{ "help", 'h', 0, "display this help and exit" },
 	{ NULL, 0, 0, NULL },
 };
@@ -128,6 +129,9 @@ static int parse_command_line(int argc, char const *const * argv)
 		case 'p':
 			lfd_config_listen_port=atoi(optarg);
 			lfd_config_data_port=0;
+			break;
+		case 'd':
+			lfd_config_debug=atoi(optarg);
 			break;
 		case 'h':
 			show_help(argv[0]);
