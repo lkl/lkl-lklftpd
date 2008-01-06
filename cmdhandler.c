@@ -93,7 +93,7 @@ static char * get_abs_path(const char * path, struct lfd_sess *sess, apr_pool_t 
 		path = apr_pstrcat(allocator_pool, sess->cwd_path, path, NULL);
 	}
 	
-	return path;
+	return (char*)path;
 }
 
 
@@ -713,7 +713,7 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 	{
 		flags |= APR_FOPEN_TRUNCATE;
 	}
-	rc = lkl_file_open(&file, filename, flags, 0, sess->loop_pool);
+	rc = lkl_file_open(&file, filename, flags, APR_FPROT_OS_DEFAULT, sess->loop_pool);
 	if(APR_SUCCESS != rc)
 	{
 		lfd_log(LFD_ERROR, "lkl_file_open failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
@@ -834,17 +834,17 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 			snprintf(buffer, sizeof(buffer), "%c%c%c%c%c%c%c%c%c%c ftp ftp %d %s %s",
 				 (finfo.filetype == APR_DIR)?'d':'-',
 				 /* user permission */
-				 (finfo.protection&00400)?'r':'-',
-				 (finfo.protection&00200)?'w':'-',
-				 (finfo.protection&00100)?'x':'-',
+				 (finfo.protection&APR_FPROT_UREAD)?'r':'-',
+				 (finfo.protection&APR_FPROT_UWRITE)?'w':'-',
+				 (finfo.protection&APR_FPROT_UEXECUTE)?'x':'-',
 				 /* group permission */
-				 (finfo.protection&00040)?'r':'-',
-				 (finfo.protection&00020)?'w':'-',
-				 (finfo.protection&00010)?'x':'-',
+				 (finfo.protection&APR_FPROT_GREAD)?'r':'-',
+				 (finfo.protection&APR_FPROT_GWRITE)?'w':'-',
+				 (finfo.protection&APR_FPROT_GEXECUTE)?'x':'-',
 				 /* others permission */
-				 (finfo.protection&00004)?'r':'-',
-				 (finfo.protection&00002)?'w':'-',
-				 (finfo.protection&00001)?'x':'-',
+				 (finfo.protection&APR_FPROT_WREAD)?'r':'-',
+				 (finfo.protection&APR_FPROT_WWRITE)?'w':'-',
+				 (finfo.protection&APR_FPROT_WEXECUTE)?'x':'-',
 				 (int)finfo.size, time_string, finfo.name);
 		} else
 			snprintf(buffer, sizeof(buffer), "%s%s", finfo.name,
