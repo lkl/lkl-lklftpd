@@ -50,7 +50,6 @@ apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* sess, char** p_cmd_str, 
 	char			* buffer;
 	char			* cmd_body, * cmd_arg;
 	char			* last;
-	const char		* sep =" " FTP_ENDCOMMAND_SEQUENCE;
 	apr_size_t		  len = cmd_input_buffer_len;
 
 
@@ -72,11 +71,11 @@ apr_status_t lfd_cmdio_get_cmd_and_arg(struct lfd_sess* sess, char** p_cmd_str, 
 	}
 
 	// parse the command
-	cmd_body = apr_strtok(buffer, sep, &last);
+	cmd_body = apr_strtok(buffer, " ", &last);
 	if(NULL != cmd_body)
 	{
 		buffer = last;
-		cmd_arg = apr_strtok(buffer, sep, &last);
+		cmd_arg = apr_strtok(buffer, FTP_ENDCOMMAND_SEQUENCE, &last);
 	}
 	else
 	{
