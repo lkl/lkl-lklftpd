@@ -1,6 +1,8 @@
 //here we implement the lkl-based file wrappers.
 #ifdef LKL_FILE_APIS
 
+#include <poll.h>
+
 #include "fileops.h"
 
 #define APR_FILE_BUFSIZE 4096
