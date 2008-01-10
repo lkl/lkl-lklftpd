@@ -1,7 +1,7 @@
 #uncoment the next 2 lines to get LKL's file APIs. This currently works on linux only
 .PHONY=clean
 LKL_DEFINES+=-DLKL_FILE_APIS -Iinclude
-LKL=$(CROSS)lkl/vmlinux $(CROSS)lkl/env.a
+LKL=$(CROSS)lkl/lkl.a
 
 APR_WIN_INCLUDE=-Iapr_win/include/
 
@@ -48,18 +48,11 @@ $(CROSS)lkl/.config: .config
 	mkdir -p $(CROSS)lkl && \
 	cp $< $@
 
-$(CROSS)lkl/vmlinux: $(CROSS)lkl/.config 
+$(CROSS)lkl/lkl.a: $(CROSS)lkl/.config 
 	cd $(LINUX) && \
 	$(MAKE) O=$(HERE)/$(CROSS)lkl ARCH=lkl \
-	CROSS_COMPILE=$(CROSS) \
-	vmlinux
-
-$(CROSS)lkl/env.a: $(CROSS)lkl/.config 
-	cd $(LINUX) && \
-	$(MAKE) O=$(HERE)/$(CROSS)lkl ARCH=lkl \
-	CROSS_COMPILE=$(CROSS) \
-	EXTRA_CFLAGS="$(CFLAGS_OS)" \
-	env.a
+	CROSS_COMPILE=$(CROSS) LKLENV_CFLAGS="$(CFLAGS_OS)" \
+	lkl.a
 
 CFLAGS=-Wall -g $(CFLAGS_OS) $(LKL_DEFINES)
 
