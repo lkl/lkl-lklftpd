@@ -62,6 +62,10 @@ CFLAGS=-Wall -g $(CFLAGS_OS) $(LKL_DEFINES)
 AOUT=$(OBJS) $(LKL) 
 AEXE=$(OBJS) $(LKL)
 
+disk:
+	dd if=/dev/zero of=disk bs=100M count=1
+	mkfs.ext3 -F disk
+
 clean:
 	-rm -rf daemon.out daemon.exe include *.o drivers/*.o drivers/built-in* drivers/.*.cmd .deps/ *~
 
