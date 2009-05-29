@@ -28,11 +28,11 @@ all: daemon.out
 
 include/asm:
 	-$(MKDIR) `dirname $@`
-	ln -s $(LINUX)/include/asm-lkl include/asm
+	ln -s $(LINUX)/arch/lkl/include/asm include/asm
 
-include/asm-i386:
+include/x86:
 	-$(MKDIR) `dirname $@`
-	ln -s $(LINUX)/include/asm-i386 include/asm-i386
+	ln -s $(LINUX)/arch/x86 include/x86
 
 include/asm-generic:
 	-$(MKDIR) `dirname $@`
@@ -42,7 +42,7 @@ include/linux:
 	-$(MKDIR) `dirname $@`
 	ln -s $(LINUX)/include/linux include/linux
 
-INC=include/asm include/asm-generic include/asm-i386 include/linux
+INC=include/asm include/asm-generic include/x86 include/linux
 
 $(CROSS)lkl/.config: .config 
 	mkdir -p $(CROSS)lkl && \
