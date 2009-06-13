@@ -9,7 +9,7 @@ enum err_levels
 {
 	LFD_ERROR,
 	LFD_WARN,
-	LFS_DBG
+	LFD_DBG
 };
 
 void lfd_log(enum err_levels lvl, char * fmt, ...);
