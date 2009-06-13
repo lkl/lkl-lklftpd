@@ -20,6 +20,9 @@ static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 
 	*plisten_sock = NULL;
 
+	/*
+	 * Get a list of addresses for this HOST:PORT
+	 */
 	rc = apr_sockaddr_info_get(&saddr, lfd_config_listen_host, APR_UNSPEC, lfd_config_listen_port, 0, mp);
 	if (APR_SUCCESS != rc)
 	{
@@ -31,38 +34,50 @@ static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 		lfd_log(LFD_ERROR, "apr_sockaddr_info_get returned NO entries");
 		return;
 	}
-	do
-	{
+
+	/*
+	 * iterate through all address info descriptors for this host
+	 * until you find one that you can bind on, or until there are
+	 * no more addresses to try.
+	 */
+	do {
+		// create a socket
 		rc = apr_socket_create(&listen_sock, saddr->family, SOCK_STREAM, APR_PROTO_TCP, mp);
 		if(APR_SUCCESS != rc)
 		{
 			lfd_log(LFD_ERROR, "apr_socket_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			listen_sock = NULL;
+			goto try_next_addr;
 		}
-		else
+
+		// bind it - we don't really care if REUSEADDR fails or not
+		apr_socket_opt_set(listen_sock, APR_SO_REUSEADDR, 1);
+		rc = apr_socket_bind(listen_sock, saddr);
+		if(APR_SUCCESS != rc)
 		{
-			apr_socket_opt_set(listen_sock, APR_SO_REUSEADDR, 1);
-			rc = apr_socket_bind(listen_sock, saddr);
-			if(APR_SUCCESS != rc)
-			{
-				lfd_log(LFD_ERROR, "apr_socket_bind failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
-				apr_socket_close(listen_sock); listen_sock = NULL;
-			}
-			else
-			{
-				rc = apr_socket_listen(listen_sock, lfd_config_backlog);
-				if(APR_SUCCESS != rc)
-				{
-					lfd_log(LFD_ERROR, "create_listen_socket: apr_socket_listen failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
-					apr_socket_close(listen_sock); listen_sock = NULL;
-				}
-				else
-				{
-					break;
-				}
-			}
+			lfd_log(LFD_ERROR, "apr_socket_bind failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			apr_socket_close(listen_sock);
+			listen_sock = NULL;
+			goto try_next_addr;
 		}
+
+		// and listen on it
+		rc = apr_socket_listen(listen_sock, lfd_config_backlog);
+		if(APR_SUCCESS != rc)
+		{
+			lfd_log(LFD_ERROR, "create_listen_socket: apr_socket_listen failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			apr_socket_close(listen_sock);
+			listen_sock = NULL;
+			goto try_next_addr;
+		}
+
+	try_next_addr:
 		saddr = saddr->next;
-	}while(NULL != saddr);
+	} while((NULL == listen_sock) && (NULL != saddr));
+
+	/* if one iteration finished succcessfully listen_sock will be non-NULL.
+	 * if none finish successfully, listen_sock will be NULL
+	 */
 	*plisten_sock = listen_sock;
 }
 
