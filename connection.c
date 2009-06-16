@@ -150,14 +150,14 @@ apr_status_t handle_pasv(struct lfd_sess * sess)
 	rc = bind_to_random_passive_port(sess, &saddr, &port);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "handle_pasv: bind_to_random_passive_port failed with [%d] and message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "bind_to_random_passive_port failed");
 		return rc;
 	}
 
 	rc = apr_socket_listen(sess->pasv_listen_fd, 1); //backlog of one!
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "handle_pasv: apr_socket_listen failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "apr_socket_listen failed");
 		return rc;
 	}
 
@@ -165,7 +165,7 @@ apr_status_t handle_pasv(struct lfd_sess * sess)
 	rc = apr_sockaddr_ip_get(&addr, saddr);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "handle_pasv: apr_sockaddr_ip_get failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "apr_sockaddr_ip_get failed");
 		return rc;
 	}
 
@@ -181,7 +181,7 @@ apr_status_t handle_pasv(struct lfd_sess * sess)
 				(int)vals[3], (int)vals[4], (int)vals[5]);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "handle_pasv: lfd_cmdio_write failed with [%d] and message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "lfd_cmdio_write failed");
 	}
 	return rc;
 }
@@ -326,7 +326,7 @@ static apr_status_t lfd_ftpdataio_get_pasv_fd(struct lfd_sess* sess, apr_socket_
 	if (APR_SUCCESS != rc)
 	{
 		lfd_cmdio_write(sess, FTP_BADSENDCONN, "Failed to accept connection.");
-		lfd_log(LFD_ERROR, "%s failed with errorcode[%d] and error message[%s]", __FUNCTION__, rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "apr_socket_accept failed");
 		return rc;
 	}
 
@@ -344,7 +344,7 @@ static apr_status_t ftpdataio_get_port_fd(struct lfd_sess* sess, apr_socket_t **
 	if (APR_SUCCESS != rc)
 	{
 		lfd_cmdio_write(sess, FTP_BADSENDCONN, "Failed to establish connection.");
-		lfd_log(LFD_ERROR, "get_bound_and_connected_ftp_port_sock failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "get_bound_and_connected_ftp_port_sock failed");
 		return rc;
 	}
 

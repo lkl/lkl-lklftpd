@@ -122,7 +122,7 @@ apr_status_t handle_dir_remove(struct lfd_sess *sess)
 	rc = lkl_dir_remove(rpath, sess->loop_pool);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "lkl_dir_remove failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "lkl_dir_remove failed to remove '%s'", rpath);
 		rc = lfd_cmdio_write(sess, FTP_FILEFAIL, "Cannot remove directory %s.", rpath);
 	}
 	else
@@ -164,7 +164,7 @@ apr_status_t handle_dir_create(struct lfd_sess *sess)
 
 	if(APR_SUCCESS !=rc)
 	{
-		lfd_log(LFD_ERROR, "lkl_dir_make failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "lkl_dir_make failed for '%s'", rpath);
 		rc = lfd_cmdio_write(sess, FTP_FILEFAIL, "Cannot create directory %s.", rpath);
 	}
 	else
@@ -181,7 +181,7 @@ apr_status_t handle_pwd(struct lfd_sess *sess)
 
 	rc = lfd_cmdio_write(sess, FTP_PWDOK, sess->cwd_path);
 	if(APR_SUCCESS != rc)
-		lfd_log(LFD_ERROR, "handle_pwd:lfd_cmdio_write failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "handle_pwd: lfd_cmdio_write failed");
 	return rc;
 }
 
@@ -227,7 +227,7 @@ apr_status_t handle_cwd(struct lfd_sess *sess)
 	rc = lkl_stat(&finfo, path, APR_FINFO_TYPE, sess->loop_pool);
 	if((APR_SUCCESS != rc) || (APR_DIR != finfo.filetype))
 	{
-		lfd_log(LFD_ERROR, "lkl_stat failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "lkl_stat failed for '%s'", path);
 		rc = lfd_cmdio_write(sess, FTP_FILEFAIL, "%s is not a directory.", path);
 		return rc;
 	}
@@ -331,7 +331,7 @@ apr_status_t handle_rnto(struct lfd_sess *sess, char * old_path)
 
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "lkl_file_rename failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "lkl_file_rename failed for old='%s' new='%s'", old_path, path);
 		rc = lfd_cmdio_write(sess, FTP_BADOPTS, "Cannot rename directory/file %s.", path);
 	}
 	else
@@ -423,7 +423,7 @@ static struct lfd_transfer_ret do_file_send_rwloop(struct lfd_sess* sess, lkl_fi
 		if((APR_SUCCESS != rc) && (APR_EOF != rc))
 		{
 			ret_struct.retval = -1;
-			lfd_log(LFD_ERROR, "lkl_file_read failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+			lfd_log_apr_err(rc, "lkl_file_read failed");
 			return ret_struct;
 		}
 		else if (0 == bytes_read)
@@ -445,7 +445,7 @@ static struct lfd_transfer_ret do_file_send_rwloop(struct lfd_sess* sess, lkl_fi
 		if((APR_SUCCESS != rc) || (bytes_written != bytes_read))
 		{
 			ret_struct.retval = -2;
-			lfd_log(LFD_ERROR, "lfd_socket_write_full failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+			lfd_log_apr_err(rc, "lfd_socket_write_full failed");
 			return ret_struct;
 		}
 		ret_struct.transferred += bytes_written;
@@ -574,7 +574,7 @@ apr_status_t handle_dele(struct lfd_sess * sess)
 	rc = lkl_file_remove(path, sess->loop_pool);
 	if(APR_SUCCESS !=rc)
 	{
-		lfd_log(LFD_ERROR, "lkl_file_remove failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "lkl_file_remove failed for '%s'", path);
 		rc = lfd_cmdio_write(sess, FTP_FILEFAIL, "Requested action not taken. File unavailable.");
 	}
 	else
@@ -638,7 +638,7 @@ static struct lfd_transfer_ret do_file_recv(struct lfd_sess* sess, lkl_file_t * 
 		rc = apr_socket_recv(sess->data_conn->data_sock, p_recvbuf + 1, &bytes_recvd);
 		if((APR_SUCCESS != rc) && (APR_EOF != rc))
 		{
-			lfd_log(LFD_ERROR, "apr_socket_recv in do_file_recv failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+			lfd_log_apr_err(rc, "apr_socket_recv failed");
 			ret_struct.retval = -2;
 			return ret_struct;
 		}
@@ -663,10 +663,10 @@ static struct lfd_transfer_ret do_file_recv(struct lfd_sess* sess, lkl_file_t * 
 		rc = lkl_file_write_full(file_fd, p_writebuf, num_to_write, &bytes_written);
 		if((APR_SUCCESS != rc) || (num_to_write != bytes_written))
 		{
-			lfd_log(LFD_ERROR, "lkl_file_write_full in do_file_recv failed with errorcode[%d] and error message[%s]. "
-					"Bytes that had to be written [%d]."
-					"Bytes that  got      written [%d].",
-					rc, lfd_sess_strerror(sess, rc), num_to_write, bytes_written);
+			lfd_log_apr_err(rc, "lkl_file_write_full in do_file_recv failed.\n"
+					"\tBytes that had to be  written [%d].\n"
+					"\tBytes that really got written [%d].",
+					num_to_write, bytes_written);
 			ret_struct.retval = -1;
 			return ret_struct;
 		}
@@ -716,7 +716,7 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 	rc = lkl_file_open(&file, filename, flags, APR_FPROT_OS_DEFAULT, sess->loop_pool);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "lkl_file_open failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "lkl_file_open failed for '%s'", filename);
 		lfd_cmdio_write(sess, FTP_UPLOADFAIL, "Could not create file.");
 		return rc;
 	}
@@ -727,7 +727,7 @@ static apr_status_t handle_upload_common(struct lfd_sess *sess, int is_append, i
 		rc = lkl_file_seek(file, APR_SET, &offset);
 		if(APR_SUCCESS != rc)
 		{
-			lfd_log(LFD_ERROR, "lkl_file_seek handle_uppload_common failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+			lfd_log_apr_err(rc, "lkl_file_seek handle_uppload_common failed");
 			lfd_cmdio_write(sess, FTP_UPLOADFAIL, "Could not seek into file.");
 			return rc;
 		}
@@ -809,7 +809,7 @@ static apr_status_t list_dir(const char * directory, apr_pool_t * pool, char ** 
 		*p_dest = "";
 	}
 
-	for(apr_err = lkl_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS;
+	for(apr_err = lkl_dir_read(&finfo, flags, dir); apr_err == APR_SUCCESS || apr_err == APR_INCOMPLETE;
 		   apr_err = lkl_dir_read(&finfo, flags, dir))
 	{
 		char buffer[1024];
@@ -886,7 +886,7 @@ apr_status_t handle_list(struct lfd_sess *sess)
 	rc = list_dir(path, sess->loop_pool, &file_list, flags);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "list_dir failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+		lfd_log_apr_err(rc, "list_dir failed for '%s'", path);
 		rc = lfd_cmdio_write(sess, FTP_BADOPTS, "Cannot list files.");
 		return rc;
 	}

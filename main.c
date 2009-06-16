@@ -46,21 +46,20 @@ static char mount_point[32];
 
 int lkl_add_disk(void)
 {
-	apr_status_t rc;
-	apr_off_t off=0;
-
+	apr_status_t rc = APR_SUCCESS;
+	apr_off_t off = 0;
 	rc=apr_file_open(&disk_file, disk_image,
 			 APR_FOPEN_READ| (ro?0:APR_FOPEN_WRITE)|
 			 APR_FOPEN_BINARY, APR_OS_DEFAULT,
 			 root_pool);
 	if (rc != APR_SUCCESS) {
-		lfd_log(LFD_ERROR, "failed to open disk image '%s': %s", disk_image, lfd_apr_strerror_thunsafe(rc));
+		lfd_log_apr_err(rc, "failed to open disk image '%s'", disk_image);
 		return -1;
 	}
 
 	rc=apr_file_seek(disk_file, APR_END, &off);
 	if (rc != APR_SUCCESS) {
-		lfd_log(LFD_ERROR, "failed to seek to the end of'%s': %s", disk_image, lfd_apr_strerror_thunsafe(rc));
+		lfd_log_apr_err(rc, "failed to seek to the end of '%s'", disk_image);
 		return -1;
 	}
 
@@ -155,7 +154,7 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	rc = apr_app_initialize(&argc, &argv, &engv);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "apr_initialize_app failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+		lfd_log_apr_err(rc, "apr_initialize_app failed");
 		return 1;
 	}
 	atexit(apr_terminate);
@@ -163,7 +162,7 @@ int main(int argc, char const *const * argv, char const *const * engv)
 	rc = apr_pool_create(&root_pool, NULL);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "main's apr_pool_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+		lfd_log_apr_err(rc, "main's apr_pool_create failed");
 		return 2;
 	}
 
@@ -208,7 +207,7 @@ int main(int argc, char const *const * argv, char const *const * engv)
 		lkl_sys_halt();
 		if (disk_file)
 			apr_file_close(disk_file);
-		lfd_log(LFD_ERROR, "failed to mount disk: %d", rc);
+		lfd_log_linux_err(rc, LFD_ERROR, "failed to mount disk");
 		return -1;
 	}
 #endif 

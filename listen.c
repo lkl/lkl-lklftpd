@@ -26,7 +26,7 @@ static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 	rc = apr_sockaddr_info_get(&saddr, lfd_config_listen_host, APR_UNSPEC, lfd_config_listen_port, 0, mp);
 	if (APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "apr_sockaddr_info_get failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+		lfd_log_apr_err(rc, "apr_sockaddr_info_get failed");
 		return;
 	}
 	if (NULL == saddr)
@@ -45,7 +45,7 @@ static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 		rc = apr_socket_create(&listen_sock, saddr->family, SOCK_STREAM, APR_PROTO_TCP, mp);
 		if(APR_SUCCESS != rc)
 		{
-			lfd_log(LFD_ERROR, "apr_socket_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			lfd_log_apr_err(rc, "apr_socket_create failed");
 			listen_sock = NULL;
 			goto try_next_addr;
 		}
@@ -55,7 +55,7 @@ static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 		rc = apr_socket_bind(listen_sock, saddr);
 		if(APR_SUCCESS != rc)
 		{
-			lfd_log(LFD_ERROR, "apr_socket_bind failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			lfd_log_apr_err(rc, "apr_socket_bind failed");
 			apr_socket_close(listen_sock);
 			listen_sock = NULL;
 			goto try_next_addr;
@@ -63,15 +63,14 @@ static void create_listen_socket(apr_socket_t**plisten_sock, apr_pool_t*mp)
 
 		// and listen on it
 		rc = apr_socket_listen(listen_sock, lfd_config_backlog);
-		if(APR_SUCCESS != rc)
-		{
-			lfd_log(LFD_ERROR, "create_listen_socket: apr_socket_listen failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+		if(APR_SUCCESS != rc) {
+			lfd_log_apr_err(rc, "apr_socket_listen failed");
 			apr_socket_close(listen_sock);
 			listen_sock = NULL;
 			goto try_next_addr;
 		}
 
-	try_next_addr:
+try_next_addr:
 		saddr = saddr->next;
 	} while((NULL == listen_sock) && (NULL != saddr));
 
@@ -113,7 +112,7 @@ void lfd_listen(apr_pool_t * mp)
 	rc = apr_threadattr_create(&thattr, mp);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "lfd_listen: apr_threadattr_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+		lfd_log_apr_err(rc, "apr_threadattr_create failed");
 		return;
 	}
 	while(1)
@@ -126,7 +125,7 @@ void lfd_listen(apr_pool_t * mp)
 			rc = apr_pool_create(&thd_pool, NULL);
 			if(APR_SUCCESS != rc)
 			{
-				lfd_log(LFD_ERROR, "lfd_listen: apr_pool_create of thd_pool failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+				lfd_log_apr_err(rc, "apr_pool_create of thd_pool failed");
 				continue;
 			}
 		}
@@ -137,7 +136,7 @@ void lfd_listen(apr_pool_t * mp)
 		if((APR_SUCCESS != rc) && (!APR_STATUS_IS_TIMEUP(rc)) && (!APR_STATUS_IS_EINTR(rc)))
 		{
 			//break - an unrecoverable error occured
-			lfd_log(LFD_ERROR, "lfd_listen: apr_poll failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			lfd_log_apr_err(rc, "apr_poll failed");
 			break;
 		}
 
@@ -156,7 +155,7 @@ void lfd_listen(apr_pool_t * mp)
 		if(APR_SUCCESS != rc)
 		{
 			//###: For which errorcode must we break out of the loop?
-			lfd_log(LFD_ERROR, "lfd_listen: apr_socket_accept failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			lfd_log_apr_err(rc, "apr_socket_accept failed");
 			if(APR_STATUS_IS_EAGAIN(rc))
 			{
 				lfd_log(LFD_ERROR, "lfd_listen: APR_STATUS_IS_EAGAIN");
@@ -166,7 +165,7 @@ void lfd_listen(apr_pool_t * mp)
 		rc = apr_thread_create(&thd, thattr, &lfd_worker_protocol_main, (void*)client_sock, thd_pool);
 		if(APR_SUCCESS != rc)
 		{
-			lfd_log(LFD_ERROR, "apr_thread_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+			lfd_log_apr_err(rc, "apr_thread_create failed");
 			apr_socket_close(client_sock);
 			continue;
 		}
@@ -183,13 +182,13 @@ void lfd_connect(apr_socket_t ** pconnect_sock,apr_sockaddr_t * saddr, apr_pool_
 	rc = apr_socket_create(&connect_sock, saddr->family, SOCK_STREAM, APR_PROTO_TCP, mp);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "apr_socket_create failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+		lfd_log_apr_err(rc, "apr_socket_create failed");
 		return;
 	}
 	rc = apr_socket_connect(connect_sock, saddr);
 	if(APR_SUCCESS != rc)
 	{
-		lfd_log(LFD_ERROR, "apr_socket_connect failed with errorcode %d errormsg %s", rc, lfd_apr_strerror_thunsafe(rc));
+		lfd_log_err(LFD_ERROR, "apr_socket_connect failed");
 		apr_socket_close(connect_sock);
 		return;
 	}

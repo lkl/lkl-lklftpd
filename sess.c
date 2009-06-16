@@ -27,7 +27,6 @@ apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, ap
 	sess->loop_pool = loop_pool;
 	sess->cmd_input_buffer = apr_pcalloc(sess_pool, cmd_input_buffer_len);
 	sess->comm_sock = sock;
-	sess->dbg_strerror_buffer = apr_pcalloc(sess_pool, STR_ERROR_MAX_LEN);
 
 	sess->data_conn = apr_pcalloc(sess_pool, sizeof(struct lfd_data_sess));
 	sess->cwd_path = apr_pstrdup(sess->sess_pool, "/");
@@ -41,11 +40,6 @@ void lfd_sess_destroy(struct lfd_sess *sess)
 
 	apr_pool_destroy(sess->loop_pool);
 	apr_socket_close(sess->comm_sock);
-}
-
-char * lfd_sess_strerror(struct lfd_sess * sess, apr_status_t rc)
-{
-	return apr_strerror(rc, sess->dbg_strerror_buffer, STR_ERROR_MAX_LEN);
 }
 
 apr_status_t lfd_data_sess_create(struct lfd_data_sess ** plfd_data_sess, apr_thread_t * thd, apr_socket_t *sock)

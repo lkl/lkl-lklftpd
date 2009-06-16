@@ -27,7 +27,6 @@ struct lfd_sess
 	apr_pool_t		* loop_pool; 			//use this pool to allocate temporary data and data that is relevant to the current command only.
 	apr_pool_t		* sess_pool; 			//use this pool to allocate objects that have meaning durring the whole lifetime of the session.
 	char 			* cmd_input_buffer;		//buffer used for reading commands
-	char			* dbg_strerror_buffer; 		//this buffer is used to map string error numbers to error descriptions.
 	char			* ftp_cmd_str;			// command body
 	char			* ftp_arg_str;			// command argument
 	char			* cwd_path;			// the user's current working directory
@@ -40,7 +39,6 @@ extern const apr_size_t cmd_input_buffer_len;	//length of lfd_sess.cmd_input_buf
 
 apr_status_t lfd_sess_create(struct lfd_sess **plfd_sess, apr_thread_t * thd, apr_socket_t * sock);
 void lfd_sess_destroy(struct lfd_sess *sess);
-char * lfd_sess_strerror(struct lfd_sess * sess, apr_status_t rc);
 
 apr_status_t lfd_data_sess_create(struct lfd_data_sess **plfd_data_sess, apr_thread_t * thd, apr_socket_t *sock);
 void lfd_data_sess_destroy(struct lfd_data_sess *sess);

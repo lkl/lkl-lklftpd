@@ -193,16 +193,16 @@ static void * APR_THREAD_FUNC lfd_worker_protocol_main_impl(apr_thread_t * thd, 
 	{
 		//cannot call lfs_sess_destroy because we were unable to construct the object.
 		apr_socket_close(sock);
-		lfd_log(LFD_ERROR, "lfd_sess_create failed with errorcode %d", rc);
+		lfd_log_apr_err(rc, "lfd_sess_create failed with errorcode %d");
 		return NULL;
 	}
-	//if any of the following stages fail, the session obliteration code at the end is run.
 
+	//if any of the following stages fail, the session obliteration code at the end is run.
 	if(APR_SUCCESS == rc)
 	{
 		rc = emit_greeting(sess);
 		if(APR_SUCCESS != rc)
-			lfd_log(LFD_ERROR, "emit_greeting failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+			lfd_log_apr_err(rc, "emit_greeting failed");
 	}
 
 
@@ -210,7 +210,7 @@ static void * APR_THREAD_FUNC lfd_worker_protocol_main_impl(apr_thread_t * thd, 
 	{
 		rc = ftp_protocol_loop(sess);
 		if(APR_SUCCESS != rc)
-			lfd_log(LFD_ERROR, "ftp_protocol_loop failed with errorcode[%d] and error message[%s]", rc, lfd_sess_strerror(sess, rc));
+			lfd_log_apr_err(rc, "ftp_protocol_loop failed");
 	}
 
 	lfd_sess_destroy(sess);

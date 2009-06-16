@@ -4,13 +4,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <apr_errno.h>
+#include <string.h>
 
-
-char* lfd_apr_strerror_thunsafe(apr_status_t rc)
-{
-	static char static_error_buff[STR_ERROR_MAX_LEN];
-	return apr_strerror(rc, static_error_buff, STR_ERROR_MAX_LEN);
-}
 
 
 void lfd_log(enum err_levels lvl, char * fmt, ...)
@@ -22,6 +18,63 @@ void lfd_log(enum err_levels lvl, char * fmt, ...)
 	printf("\n");
 	va_end(ap);
 }
+
+static const char * err_source_str(enum err_source_t errsrc)
+{
+	switch (errsrc)
+	{
+	case ERR_SOURCE_APR:
+		return "APR";
+	case ERR_SOURCE_LINUX:
+		return "LINUX";
+	default:
+		return "<unknown-err-src>";
+	}
+}
+
+static const char * err_source_strerror(enum err_source_t errsrc, int rc, char * error_buff, size_t size)
+{
+	char * error_msg = NULL;
+	switch(errsrc)
+	{
+	case ERR_SOURCE_APR:
+		error_msg = apr_strerror(rc, error_buff, size);
+		break;
+	case ERR_SOURCE_LINUX:
+		// the kernel internally uses "-errno" vals; we must negate it once more
+		error_msg = strerror_r(-rc, error_buff, size);
+		/*
+		if (ret != 0)
+		{
+			printf("{{nested error while printing errmsg: strerror_r returned %d %s for for errnum = %d}}\n", ret, strerror(ret), -rc);
+		}
+		error_msg = error_buff;
+		*/
+		break;
+	default:
+		error_msg = "<cannot-determine-err-msg>";
+		break;
+	}
+	return error_msg;
+}
+
+void lfd_log_err_impl(enum err_source_t errsrc, const char * file, int line, const char * func, int rc, char * fmt, ...)
+{
+	char error_buff[STR_ERROR_MAX_LEN];
+	va_list ap;
+
+	memset(error_buff, 0, sizeof(error_buff));
+	printf("[ERROR][%s] %s:%d %s() -- ", err_source_str(errsrc), file, line, func);
+
+	va_start(ap, fmt);
+	vprintf(fmt, ap);
+	va_end(ap);
+	printf("\n");
+
+
+	printf("\t rc = %d, strerr = [%s]\n", rc, err_source_strerror(errsrc, rc, error_buff, STR_ERROR_MAX_LEN));
+}
+
 void bug(const char* p_text)
 {
 	printf("%s\n", p_text);
