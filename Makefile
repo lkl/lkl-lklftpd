@@ -67,13 +67,13 @@ disk:
 	mkfs.ext3 -F disk
 
 clean:
-	-rm -rf daemon.out daemon.exe include *.o drivers/*.o drivers/built-in* drivers/.*.cmd .deps/ *~
+	-rm -rf daemon.out daemon.exe include *.o .deps/ *~
 
 clean-all: clean
 	-rm -rf lkl lkl-nt
 
-TAGS: 
-	etags *.c drivers/*.c
+TAGS:  *.c *.h
+	etags $^
 
 daemon.out: $(AOUT) $(INC) 
 	$(CC) $(AOUT) $(APR_LIN_LIB) -o $@
